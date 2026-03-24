@@ -82,6 +82,50 @@ function format_date_id(?string $value, bool $withTime = false): string
     return $day . ' ' . $month . ' ' . $year;
 }
 
+function terbilang_id(int $value): string
+{
+    $value = abs($value);
+    $words = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
+
+    if ($value < 12) {
+        return $words[$value];
+    }
+
+    if ($value < 20) {
+        return terbilang_id($value - 10) . ' belas';
+    }
+
+    if ($value < 100) {
+        return trim(terbilang_id((int) floor($value / 10)) . ' puluh ' . terbilang_id($value % 10));
+    }
+
+    if ($value < 200) {
+        return trim('seratus ' . terbilang_id($value - 100));
+    }
+
+    if ($value < 1000) {
+        return trim(terbilang_id((int) floor($value / 100)) . ' ratus ' . terbilang_id($value % 100));
+    }
+
+    if ($value < 2000) {
+        return trim('seribu ' . terbilang_id($value - 1000));
+    }
+
+    if ($value < 1000000) {
+        return trim(terbilang_id((int) floor($value / 1000)) . ' ribu ' . terbilang_id($value % 1000));
+    }
+
+    if ($value < 1000000000) {
+        return trim(terbilang_id((int) floor($value / 1000000)) . ' juta ' . terbilang_id($value % 1000000));
+    }
+
+    if ($value < 1000000000000) {
+        return trim(terbilang_id((int) floor($value / 1000000000)) . ' miliar ' . terbilang_id($value % 1000000000));
+    }
+
+    return trim(terbilang_id((int) floor($value / 1000000000000)) . ' triliun ' . terbilang_id($value % 1000000000000));
+}
+
 function now_string(): string
 {
     return date('Y-m-d H:i:s');

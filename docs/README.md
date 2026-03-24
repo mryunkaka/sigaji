@@ -67,8 +67,16 @@ Sistem baru:
 - Mirror generate gaji
 - UI simplifikasi
 - AJAX optimization
+- Mirror halaman user
+- Mirror halaman unit
 
 ## Catatan Implementasi
 
 - Field `potongan_khusus` dipakai juga sebagai tempat override hutang manual agar tetap mengikuti struktur lama tanpa menambah tabel baru.
 - Formula payroll mengikuti logic project lama sejauh yang terwakili di schema SQL aktif.
+
+## Belum Dimirror Sepenuhnya
+
+- Halaman `User` native untuk CRUD karyawan masih belum ada.
+- Halaman `Unit` native untuk CRUD unit masih belum ada.
+- Detail slip dan laporan sekarang sudah dibuat lebih dekat ke format project lama, tetapi field rekening/bank tidak dimunculkan karena schema `hark8423_gaji.sql` tidak memiliki kolom tersebut.

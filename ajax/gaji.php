@@ -3,15 +3,104 @@
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 
+$filterPreset = (string) request_value('filter', 'previous_month');
+$today = new DateTimeImmutable('today');
+
+$resolveRange = static function (string $preset) use ($today): array {
+    return match ($preset) {
+        'current_month' => [
+            'start' => $today->modify('first day of this month')->format('Y-m-d'),
+            'end' => $today->modify('last day of this month')->format('Y-m-d'),
+        ],
+        'one_month_ago' => [
+            'start' => $today->modify('first day of -2 month')->format('Y-m-d'),
+            'end' => $today->modify('last day of -2 month')->format('Y-m-d'),
+        ],
+        'two_months_ago' => [
+            'start' => $today->modify('first day of -3 month')->format('Y-m-d'),
+            'end' => $today->modify('last day of -3 month')->format('Y-m-d'),
+        ],
+        default => [
+            'start' => $today->modify('first day of last month')->format('Y-m-d'),
+            'end' => $today->modify('last day of last month')->format('Y-m-d'),
+        ],
+    };
+};
+
+$defaultRange = $resolveRange($filterPreset);
+$startDate = (string) request_value('start_date', $defaultRange['start']);
+$endDate = (string) request_value('end_date', $defaultRange['end']);
+
+if ($filterPreset !== 'custom') {
+    $startDate = $defaultRange['start'];
+    $endDate = $defaultRange['end'];
+}
+
+if (!$startDate || !$endDate || strtotime($startDate) === false || strtotime($endDate) === false) {
+    $fallback = $resolveRange('previous_month');
+    $filterPreset = 'previous_month';
+    $startDate = $fallback['start'];
+    $endDate = $fallback['end'];
+}
+
+if ($startDate > $endDate) {
+    [$startDate, $endDate] = [$endDate, $startDate];
+}
+
+$employeesWithAttendance = (int) (fetch_one(
+    'SELECT COUNT(DISTINCT a.user_id) AS total
+     FROM absensi a
+     JOIN users u ON u.id = a.user_id
+     WHERE u.unit_id = :unit_id
+       AND u.role != :role
+       AND a.tanggal BETWEEN :start AND :end',
+    ['unit_id' => $user['unit_id'], 'role' => 'owner', 'start' => $startDate, 'end' => $endDate]
+)['total'] ?? 0);
+
+$generatedEmployees = (int) (fetch_one(
+    'SELECT COUNT(DISTINCT p.user_id) AS total
+     FROM penggajian p
+     JOIN users u ON u.id = p.user_id
+     WHERE u.unit_id = :unit_id
+       AND p.tanggal_awal_gaji = :start
+       AND p.tanggal_akhir_gaji = :end',
+    ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate]
+)['total'] ?? 0);
+
+$pendingEmployees = max(0, $employeesWithAttendance - $generatedEmployees);
+
 $payrolls = fetch_all(
     'SELECT p.*, u.name
      FROM penggajian p
      JOIN users u ON u.id = p.user_id
      WHERE u.unit_id = :unit_id
-     ORDER BY p.id DESC
-     LIMIT 50',
-    ['unit_id' => $user['unit_id']]
+       AND p.tanggal_awal_gaji BETWEEN :filter_start AND :filter_end
+     ORDER BY p.tanggal_awal_gaji DESC, p.id DESC',
+    ['unit_id' => $user['unit_id'], 'filter_start' => $startDate, 'filter_end' => $endDate]
 );
+
+$generatedPeriods = fetch_all(
+    'SELECT p.tanggal_awal_gaji, p.tanggal_akhir_gaji, COUNT(*) AS total_karyawan
+     FROM penggajian p
+     JOIN users u ON u.id = p.user_id
+     WHERE u.unit_id = :unit_id
+       AND p.tanggal_awal_gaji BETWEEN :filter_start AND :filter_end
+     GROUP BY p.tanggal_awal_gaji, p.tanggal_akhir_gaji
+     ORDER BY p.tanggal_awal_gaji DESC, p.tanggal_akhir_gaji DESC',
+    ['unit_id' => $user['unit_id'], 'filter_start' => $startDate, 'filter_end' => $endDate]
+);
+
+$selectedPeriod = (string) request_value('period', '');
+if ($selectedPeriod === '' && $generatedPeriods !== []) {
+    $selectedPeriod = $generatedPeriods[0]['tanggal_awal_gaji'] . '|' . $generatedPeriods[0]['tanggal_akhir_gaji'];
+}
+
+$periodOptions = [];
+foreach ($generatedPeriods as $period) {
+    $value = $period['tanggal_awal_gaji'] . '|' . $period['tanggal_akhir_gaji'];
+    $label = format_date_id($period['tanggal_awal_gaji']) . ' s/d ' . format_date_id($period['tanggal_akhir_gaji']) . ' (' . $period['total_karyawan'] . ' karyawan)';
+    $periodOptions[$value] = $label;
+}
 
 $tableRows = '';
 $modals = '';
@@ -19,7 +108,7 @@ foreach ($payrolls as $item) {
     $viewModalId = 'gaji-view-' . $item['id'];
     $tableRows .= '<tr>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
-        <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
+        <td class="px-4 py-3" data-sort-value="' . e($item['tanggal_awal_gaji']) . '">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_kotor']) . '</td>
         <td class="px-4 py-3">' . money($item['total_potongan']) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
@@ -58,26 +147,52 @@ foreach ($payrolls as $item) {
     $modals .= ui_modal($viewModalId, 'Detail Penggajian', $viewBody, ['max_width' => 'max-w-5xl']);
 }
 
-$generateForm = '<form action="ajax/generate_gaji.php" method="post" data-ajax-form class="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">'
+$filterOptions = [
+    'current_month' => 'Bulan ini',
+    'previous_month' => 'Bulan sebelumnya',
+    'one_month_ago' => '1 bulan yang lalu',
+    'two_months_ago' => '2 bulan yang lalu',
+    'custom' => 'Custom filter tanggal',
+];
+
+$filterForm = '<form class="grid gap-4 lg:grid-cols-[220px_1fr_1fr_auto]" data-section-filter data-section="gaji">'
+    . ui_select('filter', 'Periode Aktif', $filterOptions, $filterPreset)
+    . ui_input('start_date', 'Tanggal Awal', $startDate, 'date')
+    . ui_input('end_date', 'Tanggal Akhir', $endDate, 'date')
+    . '<div class="flex items-end">' . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary']) . '</div>'
+    . '</form>';
+
+$generateInfo = '<div class="grid gap-4 md:grid-cols-3">'
+    . ui_stat('Karyawan Absen', (string) $employeesWithAttendance, 'Karyawan dengan absensi pada periode ini', 'sky')
+    . ui_stat('Sudah Generate', (string) $generatedEmployees, 'Karyawan yang payroll-nya sudah dibuat', 'emerald')
+    . ui_stat('Belum Generate', (string) $pendingEmployees, 'Karyawan yang masih bisa digenerate', $pendingEmployees > 0 ? 'amber' : 'emerald')
+    . '</div>';
+
+$generateForm = '<form action="ajax/generate_gaji.php" method="post" data-ajax-form class="grid gap-4 lg:grid-cols-[220px_1fr_1fr_auto]">'
     . csrf_input()
-    . ui_input('tanggal_awal', 'Tanggal Awal', date('Y-m-01'), 'date', ['required' => 'required'])
-    . ui_input('tanggal_akhir', 'Tanggal Akhir', date('Y-m-t'), 'date', ['required' => 'required'])
+    . ui_select('filter', 'Mode Periode', $filterOptions, $filterPreset)
+    . ui_input('tanggal_awal', 'Tanggal Awal', $startDate, 'date', ['required' => 'required'])
+    . ui_input('tanggal_akhir', 'Tanggal Akhir', $endDate, 'date', ['required' => 'required'])
     . '<div class="flex items-end">' . ui_button('Generate Gaji', ['type' => 'submit', 'variant' => 'success', 'icon' => 'plus']) . '</div>'
     . '</form>';
 
-$reportForm = '<form action="print_laporan.php" method="get" target="_blank" class="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">'
-    . ui_input('tanggal_awal', 'Tanggal Awal', date('Y-m-01'), 'date', ['required' => 'required'])
-    . ui_input('tanggal_akhir', 'Tanggal Akhir', date('Y-m-t'), 'date', ['required' => 'required'])
-    . '<div class="flex items-end">' . ui_button('Cetak Laporan', ['type' => 'submit', 'variant' => 'secondary', 'icon' => 'printer']) . '</div>'
-    . '</form>';
+$reportForm = $generatedPeriods === []
+    ? '<div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">Belum ada payroll yang sudah digenerate pada filter periode ini.</div>'
+    : '<form action="print_laporan.php" method="get" target="_blank" class="grid gap-4 lg:grid-cols-[1fr_auto]">'
+        . ui_select('period', 'Periode Generated', $periodOptions, $selectedPeriod, ['required' => 'required'])
+        . '<div class="flex items-end">' . ui_button('Cetak Laporan', ['type' => 'submit', 'variant' => 'secondary', 'icon' => 'printer']) . '</div>'
+        . '</form>';
+
+$rangeLabel = format_date_id($startDate) . ' - ' . format_date_id($endDate);
 
 echo '<div class="space-y-6">';
-echo ui_panel('Generate Penggajian', $generateForm, ['subtitle' => 'Mirror flow penggajian otomatis lama: buat payroll per periode berdasarkan absensi yang tersedia.']);
-echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Slip per karyawan dan laporan periode dibuka sebagai halaman print-friendly.']);
+echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Pilih periode kerja yang ingin dicek untuk generate dan laporan.']);
+echo ui_panel('Generate Penggajian', $generateInfo . '<div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Periode aktif ' . $rangeLabel . '. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate pada rentang ini.']);
+echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Hanya periode payroll yang sudah digenerate pada filter aktif yang bisa dicetak.']);
 echo ui_panel('Daftar Penggajian', ui_table(
     ['Karyawan', 'Periode', 'Gaji Kotor', 'Total Potongan', 'Gaji Bersih', 'Cetak'],
-    $tableRows !== '' ? $tableRows : '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Belum ada payroll.</td></tr>',
+    $tableRows !== '' ? $tableRows : '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Belum ada payroll pada periode filter ini.</td></tr>',
     ['numeric_columns' => [2, 3, 4], 'storage_key' => 'gaji-daftar']
-), ['subtitle' => '50 penggajian terbaru pada unit aktif']);
+), ['subtitle' => 'Payroll yang sudah digenerate pada periode filter ' . $rangeLabel]);
 echo '</div>';
 echo $modals;
