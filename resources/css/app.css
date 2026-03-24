@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-shell text-slate-900 antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(255,255,255,.95) 0, rgba(255,255,255,.7) 22%, rgba(238,243,248,1) 58%),
+      linear-gradient(135deg, #eef3f8 0%, #e6edf5 100%);
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply h-screen overflow-hidden lg:flex;
+  }
+
+  .app-sidebar {
+    @apply shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl lg:h-screen lg:w-[320px] lg:border-b-0 lg:border-r;
+  }
+
+  .app-sidebar-inner {
+    @apply flex h-full flex-col gap-5 p-4 lg:p-6;
+  }
+
+  .sidebar-nav {
+    @apply flex gap-2 overflow-x-auto pb-1 lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden;
+  }
+
+  .sidebar-nav::-webkit-scrollbar,
+  .content-scroll::-webkit-scrollbar,
+  .modal-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .sidebar-nav::-webkit-scrollbar-thumb,
+  .content-scroll::-webkit-scrollbar-thumb,
+  .modal-scroll::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300;
+  }
+
+  .nav-pill {
+    @apply flex min-w-max items-center gap-3 rounded-[24px] border border-transparent bg-white/70 px-4 py-3 text-left text-sm font-medium text-slate-700 transition duration-200 hover:border-slate-200 hover:bg-white lg:min-w-0;
+  }
+
+  .nav-pill.active {
+    @apply border-slate-200 bg-slate-900 text-white shadow-sm;
+  }
+
+  .content-frame {
+    @apply flex min-h-0 flex-1 flex-col overflow-hidden p-3 lg:p-6;
+  }
+
+  .content-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto pr-1;
+  }
+
+  .login-shell {
+    @apply flex h-screen items-center justify-center overflow-hidden p-3 lg:p-6;
+  }
+
+  .login-card {
+    @apply grid h-full w-full max-w-[1720px] overflow-hidden rounded-[34px] border border-white/60 bg-white/90 shadow-[0_32px_90px_rgba(15,23,42,.12)] backdrop-blur-xl lg:grid-cols-[1.02fr_.98fr];
+  }
+
+  .login-hero {
+    @apply hidden h-full overflow-hidden bg-slate-900 p-8 text-white lg:flex lg:flex-col;
+    background-image:
+      radial-gradient(circle at top right, rgba(16,185,129,.18) 0, rgba(15,23,42,0) 34%),
+      radial-gradient(circle at bottom left, rgba(59,130,246,.16) 0, rgba(15,23,42,0) 38%);
+  }
+
+  .soft-card {
+    @apply rounded-[28px] border border-white/90 bg-white/70 shadow-[0_20px_55px_rgba(15,23,42,.06)] backdrop-blur-sm;
+  }
+}
