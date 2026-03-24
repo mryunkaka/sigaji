@@ -186,7 +186,7 @@ $reportForm = $generatedPeriods === []
 $rangeLabel = format_date_id($startDate) . ' - ' . format_date_id($endDate);
 
 echo '<div class="space-y-6">';
-echo ui_panel('Filter Periode Gajis', $filterForm, ['subtitle' => 'Pilih periode kerja yang ingin dicek untuk generate dan laporan.']);
+echo ui_panel('Filter Periode Gajises', $filterForm, ['subtitle' => 'Pilih periode kerja yang ingin dicek untuk generate dan laporan.']);
 echo ui_panel('Generate Penggajian', $generateInfo . '<div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Periode aktif ' . $rangeLabel . '. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate pada rentang ini.']);
 echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Hanya periode payroll yang sudah digenerate pada filter aktif yang bisa dicetak.']);
 echo ui_panel('Daftar Penggajian', ui_table(
