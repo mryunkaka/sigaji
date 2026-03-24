@@ -19,19 +19,32 @@
 
 @layer components {
   .app-shell {
-    @apply flex h-screen flex-col overflow-hidden lg:flex-row;
+    @apply relative flex h-screen flex-col overflow-hidden;
   }
 
   .app-sidebar {
-    @apply shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl lg:h-screen lg:w-[320px] lg:border-b-0 lg:border-r;
+    width: min(88vw, 320px);
+    @apply fixed inset-y-0 left-0 z-40 -translate-x-full border-r border-slate-200/80 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,.18)] backdrop-blur-xl transition duration-300 ease-out;
+  }
+
+  body.sidebar-open .app-sidebar {
+    @apply translate-x-0;
   }
 
   .app-sidebar-inner {
     @apply flex h-full min-h-0 flex-col gap-4 p-3 sm:p-4 lg:gap-5 lg:p-6;
   }
 
+  .sidebar-backdrop {
+    @apply pointer-events-none fixed inset-0 z-30 bg-slate-900/30 opacity-0 transition duration-300 lg:hidden;
+  }
+
+  body.sidebar-open .sidebar-backdrop {
+    @apply pointer-events-auto opacity-100;
+  }
+
   .sidebar-nav {
-    @apply flex gap-2 overflow-x-auto pb-1 lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden;
+    @apply flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden pb-1;
   }
 
   .sidebar-nav::-webkit-scrollbar,
@@ -48,7 +61,7 @@
   }
 
   .nav-pill {
-    @apply flex min-w-max items-center gap-3 rounded-[22px] border border-transparent bg-white/70 px-4 py-3 text-left text-sm font-medium text-slate-700 transition duration-200 hover:border-slate-200 hover:bg-white lg:min-w-0;
+    @apply flex w-full items-center gap-3 rounded-[22px] border border-transparent bg-white/70 px-4 py-3 text-left text-sm font-medium text-slate-700 transition duration-200 hover:border-slate-200 hover:bg-white;
   }
 
   .nav-pill.active {
@@ -61,6 +74,18 @@
 
   .content-scroll {
     @apply min-h-0 flex-1 overflow-y-auto pr-0 sm:pr-1;
+  }
+
+  .sidebar-toggle {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition hover:bg-slate-50;
+  }
+
+  .sidebar-toggle-mobile {
+    @apply lg:hidden;
+  }
+
+  .sidebar-toggle-desktop {
+    @apply hidden lg:inline-flex;
   }
 
   .login-shell {
@@ -96,5 +121,15 @@
 
   .modal-card {
     max-height: calc(100vh - 2rem);
+  }
+
+  @media (min-width: 1024px) {
+    body.sidebar-open .content-frame {
+      margin-left: 320px;
+    }
+
+    .app-sidebar {
+      width: 320px;
+    }
   }
 }

@@ -26,6 +26,7 @@ $masterRows = '';
 $masterModals = '';
 foreach ($masters as $item) {
     $modalId = 'master-edit-' . $item['id'];
+    $viewModalId = 'master-view-' . $item['id'];
     $masterRows .= '<tr>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e($item['jabatan'] ?: '-') . '</td>
@@ -33,7 +34,10 @@ foreach ($masters as $item) {
         <td class="px-4 py-3">' . money($item['potongan_terlambat']) . '/menit</td>
         <td class="px-4 py-3">' . money($item['tunjangan_makan']) . '</td>
         <td class="px-4 py-3">' . money($item['tunjangan_jabatan']) . '</td>
-        <td class="px-4 py-3">' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]]) . '</td>
+        <td class="px-4 py-3"><div class="flex flex-wrap gap-2">'
+            . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]])
+            . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]])
+            . '</div></td>
     </tr>';
 
     $body = '<form action="ajax/save_master_gaji.php" method="post" data-ajax-form class="grid gap-4 md:grid-cols-2">'
@@ -51,6 +55,25 @@ foreach ($masters as $item) {
         . ui_input('pot_bpjs_kes', 'Potongan BPJS Kesehatan', $item['pot_bpjs_kes'], 'number', ['min' => '0'])
         . '<div class="md:col-span-2 flex justify-end">' . ui_button('Simpan Master Gaji', ['type' => 'submit', 'variant' => 'success']) . '</div>'
         . '</form>';
+    $viewBody = '<div class="space-y-6">'
+        . ui_detail_section('Informasi Karyawan', [
+            'Karyawan' => e($item['name']),
+            'Jabatan' => e($item['jabatan'] ?: '-'),
+        ], 2)
+        . ui_detail_section('Komponen Master Gaji', [
+            'Gaji Pokok' => e(money($item['gaji_pokok'])),
+            'Potongan Terlambat / Menit' => e(money($item['potongan_terlambat'])) . '/menit',
+            'Tunjangan BBM' => e(money($item['tunjangan_bbm'])),
+            'Tunjangan Makan / Hadir' => e(money($item['tunjangan_makan'])),
+            'Tunjangan Jabatan / Hadir' => e(money($item['tunjangan_jabatan'])),
+            'Tunjangan Kehadiran' => e(money($item['tunjangan_kehadiran'])),
+            'Tunjangan Lainnya' => e(money($item['tunjangan_lainnya'])),
+            'Potongan BPJS JHT' => e(money($item['pot_bpjs_jht'])),
+            'Potongan BPJS Kesehatan' => e(money($item['pot_bpjs_kes'])),
+        ], 3)
+        . '</div>';
+
+    $masterModals .= ui_modal($viewModalId, 'Detail Master Gaji', $viewBody, ['max_width' => 'max-w-5xl']);
     $masterModals .= ui_modal($modalId, 'Validasi Master Gaji', $body);
 }
 
@@ -58,14 +81,18 @@ $payrollRows = '';
 $payrollModals = '';
 foreach ($payrolls as $item) {
     $modalId = 'payroll-edit-' . $item['id'];
+    $viewModalId = 'payroll-view-' . $item['id'];
     $payrollRows .= '<tr>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
-        <td class="px-4 py-3">' . e($item['tanggal_awal_gaji']) . ' s/d ' . e($item['tanggal_akhir_gaji']) . '</td>
+        <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_pokok']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_terlambat']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_khusus']) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
-        <td class="px-4 py-3">' . ui_button('Override', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]]) . '</td>
+        <td class="px-4 py-3"><div class="flex flex-wrap gap-2">'
+            . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]])
+            . ui_button('Override', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]])
+            . '</div></td>
     </tr>';
 
     $body = '<form action="ajax/save_penggajian.php" method="post" data-ajax-form class="grid gap-4 md:grid-cols-2">'
@@ -82,18 +109,42 @@ foreach ($payrolls as $item) {
         . ui_input('tunjangan_lainnya', 'Tunjangan Lainnya', $item['tunjangan_lainnya'], 'number', ['min' => '0'])
         . '<div class="md:col-span-2 flex justify-end">' . ui_button('Simpan Override', ['type' => 'submit', 'variant' => 'success']) . '</div>'
         . '</form>';
+    $viewBody = '<div class="space-y-6">'
+        . ui_detail_section('Informasi Payroll', [
+            'Karyawan' => e($item['name']),
+            'Periode Awal' => e(format_date_id($item['tanggal_awal_gaji'])),
+            'Periode Akhir' => e(format_date_id($item['tanggal_akhir_gaji'])),
+            'Gaji Pokok' => e(money($item['gaji_pokok'])),
+            'Gaji Kotor' => e(money($item['gaji_kotor'])),
+            'Total Potongan' => e(money($item['total_potongan'])),
+            'Gaji Bersih' => e(money($item['gaji_bersih'])),
+        ], 3)
+        . ui_detail_section('Komponen Payroll', [
+            'Potongan Telat' => e(money($item['potongan_terlambat'])),
+            'Potongan Khusus' => e(money($item['potongan_khusus'])),
+            'Potongan Ijin' => e(money($item['potongan_ijin'])),
+            'Potongan Kehadiran' => e(money($item['potongan_kehadiran'])),
+            'Lembur' => e(money($item['lembur'])),
+            'Tunjangan BBM' => e(money($item['tunjangan_bbm'])),
+            'Tunjangan Lainnya' => e(money($item['tunjangan_lainnya'])),
+        ], 3)
+        . '</div>';
+
+    $payrollModals .= ui_modal($viewModalId, 'Detail Payroll', $viewBody, ['max_width' => 'max-w-5xl']);
     $payrollModals .= ui_modal($modalId, 'Override Payroll', $body);
 }
 
 echo '<div class="space-y-6">';
 echo ui_panel('Validasi Master Gaji', ui_table(
     ['Karyawan', 'Jabatan', 'Gaji Pokok', 'Denda Telat', 'Tunjangan Makan', 'Tunjangan Jabatan', 'Aksi'],
-    $masterRows !== '' ? $masterRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>'
+    $masterRows !== '' ? $masterRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>',
+    ['numeric_columns' => [2, 3, 4, 5], 'storage_key' => 'validasi-master-gaji']
 ), ['subtitle' => 'Basis angka default penggajian sesuai flow lama']);
 
 echo ui_panel('Override Payroll', ui_table(
     ['Karyawan', 'Periode', 'Gaji Pokok', 'Pot. Telat', 'Pot. Khusus/Hutang', 'Gaji Bersih', 'Aksi'],
-    $payrollRows !== '' ? $payrollRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada payroll untuk divalidasi.</td></tr>'
+    $payrollRows !== '' ? $payrollRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada payroll untuk divalidasi.</td></tr>',
+    ['numeric_columns' => [2, 3, 4, 5], 'storage_key' => 'validasi-override-payroll']
 ), ['subtitle' => 'Ruang validasi manual setelah generate penggajian']);
 echo '</div>';
 echo $masterModals . $payrollModals;

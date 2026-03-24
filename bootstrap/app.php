@@ -15,6 +15,7 @@ require_once __DIR__ . '/../components/button.php';
 require_once __DIR__ . '/../components/modal.php';
 require_once __DIR__ . '/../components/table.php';
 require_once __DIR__ . '/../components/panel.php';
+require_once __DIR__ . '/../components/detail.php';
 require_once __DIR__ . '/../components/field.php';
 require_once __DIR__ . '/../components/badge.php';
 require_once __DIR__ . '/../components/stat.php';

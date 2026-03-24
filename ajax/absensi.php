@@ -3,15 +3,57 @@
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 
-$monthStart = date('Y-m-01');
-$monthEnd = date('Y-m-t');
+$filterPreset = (string) request_value('filter', 'previous_month');
+$today = new DateTimeImmutable('today');
+
+$resolveRange = static function (string $preset) use ($today): array {
+    return match ($preset) {
+        'current_month' => [
+            'start' => $today->modify('first day of this month')->format('Y-m-d'),
+            'end' => $today->modify('last day of this month')->format('Y-m-d'),
+        ],
+        'one_month_ago' => [
+            'start' => $today->modify('first day of -2 month')->format('Y-m-d'),
+            'end' => $today->modify('last day of -2 month')->format('Y-m-d'),
+        ],
+        'two_months_ago' => [
+            'start' => $today->modify('first day of -3 month')->format('Y-m-d'),
+            'end' => $today->modify('last day of -3 month')->format('Y-m-d'),
+        ],
+        default => [
+            'start' => $today->modify('first day of last month')->format('Y-m-d'),
+            'end' => $today->modify('last day of last month')->format('Y-m-d'),
+        ],
+    };
+};
+
+$defaultRange = $resolveRange($filterPreset);
+$startDate = (string) request_value('start_date', $defaultRange['start']);
+$endDate = (string) request_value('end_date', $defaultRange['end']);
+
+if ($filterPreset !== 'custom') {
+    $startDate = $defaultRange['start'];
+    $endDate = $defaultRange['end'];
+}
+
+if (!$startDate || !$endDate || strtotime($startDate) === false || strtotime($endDate) === false) {
+    $fallback = $resolveRange('previous_month');
+    $filterPreset = 'previous_month';
+    $startDate = $fallback['start'];
+    $endDate = $fallback['end'];
+}
+
+if ($startDate > $endDate) {
+    [$startDate, $endDate] = [$endDate, $startDate];
+}
+
 $statusCounts = fetch_all(
     'SELECT a.status, COUNT(*) AS total
      FROM absensi a
      JOIN users u ON u.id = a.user_id
      WHERE u.unit_id = :unit_id AND a.tanggal BETWEEN :start AND :end
      GROUP BY a.status',
-    ['unit_id' => $user['unit_id'], 'start' => $monthStart, 'end' => $monthEnd]
+    ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate]
 );
 
 $statsMap = ['hadir' => 0, 'sakit' => 0, 'izin' => 0, 'cuti' => 0, 'alpa' => 0];
@@ -25,10 +67,10 @@ $records = fetch_all(
     'SELECT a.*, u.name, u.jabatan
      FROM absensi a
      JOIN users u ON u.id = a.user_id
-     WHERE u.unit_id = :unit_id
-     ORDER BY a.tanggal DESC, a.id DESC
-     LIMIT 80',
-    ['unit_id' => $user['unit_id']]
+     WHERE u.unit_id = :unit_id AND a.tanggal BETWEEN :start AND :end
+     ORDER BY a.tanggal ASC, a.id ASC
+    ',
+    ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate]
 );
 
 $statusOptions = [
@@ -37,14 +79,69 @@ $statusOptions = [
     'izin' => 'Izin',
     'cuti' => 'Cuti',
     'alpa' => 'Alpa',
+    'wfh' => 'WFH',
     'off' => 'Off',
 ];
 
+$employees = fetch_all(
+    'SELECT u.id, u.name, u.jabatan, COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat
+     FROM users u
+     LEFT JOIN master_gaji mg ON mg.user_id = u.id
+     WHERE u.unit_id = :unit_id AND u.role != :role
+     ORDER BY u.name',
+    ['unit_id' => $user['unit_id'], 'role' => 'owner']
+);
+
+$renderEmployeeSelect = static function (string $name, string $label, array $employees, $selected = null): string {
+    $options = '<option value="">Pilih Karyawan</option>';
+    foreach ($employees as $employee) {
+        $isSelected = (string) $employee['id'] === (string) $selected ? ' selected' : '';
+        $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
+    }
+
+    return '<label class="block">
+        <span class="mb-2 block text-sm font-medium text-slate-700">' . e($label) . '</span>
+        <select name="' . e($name) . '" class="w-full rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" required data-absensi-calc>
+            ' . $options . '
+        </select>
+    </label>';
+};
+
+$renderAbsensiForm = static function (array $employees, array $statusOptions, array $item, string $modalId, bool $isCreate = false) use ($renderEmployeeSelect): string {
+    $shiftOptions = ['' => 'Pilih Shift', '1' => 'Shift 1', '2' => 'Shift 2', '3' => 'Shift 3'];
+
+    return '<form action="ajax/save_absensi.php" method="post" data-ajax-form data-absensi-form class="grid gap-4 md:grid-cols-2">'
+        . csrf_input()
+        . '<input type="hidden" name="modal_id" value="' . e($modalId) . '">'
+        . '<input type="hidden" name="id" value="' . e((string) ($item['id'] ?? '')) . '">'
+        . $renderEmployeeSelect('user_id', 'Karyawan', $employees, $item['user_id'] ?? null)
+        . ui_input('tanggal', 'Tanggal', $item['tanggal'] ?? '', 'date', ['required' => 'required'])
+        . ui_select('shift', 'Shift', $shiftOptions, $item['shift'] ?? '', ['data-absensi-calc' => '1'])
+        . ui_select('status', 'Status', $statusOptions, $item['status'] ?? 'hadir', ['required' => 'required'])
+        . ui_input('jam_masuk', 'Jam Masuk', isset($item['jam_masuk']) ? substr((string) $item['jam_masuk'], 0, 5) : '', 'time', ['data-absensi-calc' => '1'])
+        . ui_input('jam_keluar', 'Jam Keluar', isset($item['jam_keluar']) ? substr((string) $item['jam_keluar'], 0, 5) : '', 'time')
+        . ui_input('total_menit_terlambat', 'Total Menit Terlambat', $item['total_menit_terlambat'] ?? 0, 'number', ['min' => '0', 'readonly' => 'readonly'])
+        . ui_input('jumlah_potongan', 'Jumlah Potongan (Rupiah)', $item['jumlah_potongan'] ?? 0, 'number', ['min' => '0', 'readonly' => 'readonly'])
+        . ui_input('lembur', 'Lembur', $item['lembur'] ?? 0, 'number', ['min' => '0'])
+        . ui_input('potongan_kehadiran', 'Potongan Kehadiran', $item['potongan_kehadiran'] ?? 0, 'number', ['min' => '0'])
+        . ui_input('potongan_ijin', 'Potongan Ijin', $item['potongan_ijin'] ?? 0, 'number', ['min' => '0'])
+        . ui_input('potongan_khusus', 'Potongan Khusus', $item['potongan_khusus'] ?? 0, 'number', ['min' => '0'])
+        . '<div class="md:col-span-2">' . ui_textarea('keterangan_potongan', 'Keterangan Potongan Terlambat', $item['keterangan_potongan'] ?? '') . '</div>'
+        . '<div class="md:col-span-2">' . ui_textarea('keterangan_lembur', 'Keterangan Lembur', $item['keterangan_lembur'] ?? '') . '</div>'
+        . '<div class="md:col-span-2">' . ui_textarea('keterangan_kehadiran', 'Keterangan Potongan Kehadiran', $item['keterangan_kehadiran'] ?? '') . '</div>'
+        . '<div class="md:col-span-2">' . ui_textarea('keterangan_ijin', 'Keterangan Ijin', $item['keterangan_ijin'] ?? '') . '</div>'
+        . '<div class="md:col-span-2">' . ui_textarea('keterangan_khusus', 'Keterangan Potongan Khusus', $item['keterangan_khusus'] ?? '') . '</div>'
+        . '<div class="md:col-span-2 flex justify-end">' . ui_button($isCreate ? 'Tambah Absensi' : 'Simpan Absensi', ['type' => 'submit', 'variant' => 'success']) . '</div>'
+        . '</form>';
+};
+
+$tableId = 'absensi-table';
 $tableRows = '';
 $modals = '';
 
 foreach ($records as $item) {
     $modalId = 'absensi-edit-' . $item['id'];
+    $viewModalId = 'absensi-view-' . $item['id'];
     $badgeTone = match ($item['status']) {
         'hadir' => 'emerald',
         'sakit', 'izin', 'cuti' => 'amber',
@@ -53,39 +150,66 @@ foreach ($records as $item) {
     };
 
     $tableRows .= '<tr>
+        <td class="px-4 py-3"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e($item['jabatan'] ?? '-') . '</td>
-        <td class="px-4 py-3">' . e($item['tanggal']) . '</td>
+        <td class="px-4 py-3" data-sort-value="' . e($item['tanggal']) . '">' . e(format_date_id($item['tanggal'])) . '</td>
         <td class="px-4 py-3">' . ui_badge(ucfirst($item['status']), $badgeTone) . '</td>
         <td class="px-4 py-3">' . e($item['shift'] ?: '-') . '</td>
         <td class="px-4 py-3">' . e($item['jam_masuk'] ?: '-') . '</td>
         <td class="px-4 py-3">' . e($item['jam_keluar'] ?: '-') . '</td>
         <td class="px-4 py-3">' . (int) $item['total_menit_terlambat'] . '</td>
         <td class="px-4 py-3">' . money($item['jumlah_potongan']) . '</td>
-        <td class="px-4 py-3">' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]]) . '</td>
+        <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+                ' . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]]) . '
+                ' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]]) . '
+            </div>
+        </td>
     </tr>';
 
-    $body = '<form action="ajax/save_absensi.php" method="post" data-ajax-form class="grid gap-4 md:grid-cols-2">'
-        . csrf_input()
-        . '<input type="hidden" name="modal_id" value="' . e($modalId) . '">'
-        . '<input type="hidden" name="id" value="' . e($item['id']) . '">'
-        . ui_input('tanggal', 'Tanggal', $item['tanggal'], 'date', ['required' => 'required'])
-        . ui_select('shift', 'Shift', ['' => 'Pilih Shift', '1' => 'Shift 1', '2' => 'Shift 2', '3' => 'Shift 3'], $item['shift'])
-        . ui_select('status', 'Status', $statusOptions, $item['status'])
-        . ui_input('total_menit_terlambat', 'Total Terlambat', $item['total_menit_terlambat'], 'number', ['min' => '0'])
-        . ui_input('jam_masuk', 'Jam Masuk', $item['jam_masuk'], 'time')
-        . ui_input('jam_keluar', 'Jam Keluar', $item['jam_keluar'], 'time')
-        . ui_input('lembur', 'Lembur', $item['lembur'], 'number', ['min' => '0'])
-        . ui_input('potongan_kehadiran', 'Potongan Kehadiran', $item['potongan_kehadiran'], 'number', ['min' => '0'])
-        . ui_input('potongan_ijin', 'Potongan Ijin', $item['potongan_ijin'], 'number', ['min' => '0'])
-        . ui_input('potongan_khusus', 'Potongan Khusus / Hutang', $item['potongan_khusus'], 'number', ['min' => '0'])
-        . '<div class="md:col-span-2">' . ui_textarea('keterangan_potongan', 'Keterangan Potongan', $item['keterangan_potongan'] ?? '') . '</div>'
-        . '<div class="md:col-span-2">' . ui_textarea('keterangan_khusus', 'Keterangan Khusus', $item['keterangan_khusus'] ?? '') . '</div>'
-        . '<div class="md:col-span-2 flex justify-end">' . ui_button('Simpan Absensi', ['type' => 'submit', 'variant' => 'success']) . '</div>'
-        . '</form>';
+    $viewBody = '<div class="space-y-6">'
+        . ui_detail_section('Informasi Absensi', [
+            'Karyawan' => e($item['name']),
+            'Jabatan' => e($item['jabatan'] ?? '-'),
+            'Tanggal' => e(format_date_id($item['tanggal'])),
+            'Status' => ui_badge(ucfirst($item['status']), $badgeTone),
+            'Shift' => e($item['shift'] ?: '-'),
+            'Jam Masuk' => e($item['jam_masuk'] ?: '-'),
+            'Jam Keluar' => e($item['jam_keluar'] ?: '-'),
+            'Terlambat' => e((string) ((int) $item['total_menit_terlambat'])) . ' menit',
+            'Jumlah Potongan' => e(money($item['jumlah_potongan'])),
+        ], 3)
+        . ui_detail_section('Komponen Tambahan', [
+            'Lembur' => e(money($item['lembur'] ?? 0)),
+            'Potongan Kehadiran' => e(money($item['potongan_kehadiran'] ?? 0)),
+            'Potongan Ijin' => e(money($item['potongan_ijin'] ?? 0)),
+            'Potongan Khusus' => e(money($item['potongan_khusus'] ?? 0)),
+        ], 4)
+        . ui_detail_section('Keterangan', [
+            'Potongan Terlambat' => nl2br(e($item['keterangan_potongan'] ?? '-')),
+            'Lembur' => nl2br(e($item['keterangan_lembur'] ?? '-')),
+            'Potongan Kehadiran' => nl2br(e($item['keterangan_kehadiran'] ?? '-')),
+            'Ijin' => nl2br(e($item['keterangan_ijin'] ?? '-')),
+            'Potongan Khusus' => nl2br(e($item['keterangan_khusus'] ?? '-')),
+        ], 1)
+        . '</div>';
 
-    $modals .= ui_modal($modalId, 'Edit Absensi', $body);
+    $modals .= ui_modal($viewModalId, 'Detail Absensi', $viewBody, ['max_width' => 'max-w-5xl']);
+    $modals .= ui_modal($modalId, 'Edit Absensi', $renderAbsensiForm($employees, $statusOptions, $item, $modalId));
 }
+
+$createModalId = 'absensi-create';
+$modals .= ui_modal($createModalId, 'Tambah Absensi Manual', $renderAbsensiForm($employees, $statusOptions, [
+    'tanggal' => $endDate,
+    'status' => 'hadir',
+    'total_menit_terlambat' => 0,
+    'jumlah_potongan' => 0,
+    'lembur' => 0,
+    'potongan_kehadiran' => 0,
+    'potongan_ijin' => 0,
+    'potongan_khusus' => 0,
+], $createModalId, true));
 
 $uploadForm = '<form action="ajax/upload_absen.php" method="post" enctype="multipart/form-data" data-ajax-form class="grid gap-4 md:grid-cols-[1fr_auto]">'
     . csrf_input()
@@ -93,19 +217,51 @@ $uploadForm = '<form action="ajax/upload_absen.php" method="post" enctype="multi
     . '<div class="flex items-end">' . ui_button('Upload Absensi', ['type' => 'submit', 'variant' => 'success', 'icon' => 'arrow-up-tray']) . '</div>'
     . '</form>';
 
+$bulkDeleteFormId = 'absensi-bulk-delete';
+$bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_absensi_bulk.php" method="post" data-ajax-form class="hidden">'
+    . csrf_input()
+    . '<input type="hidden" name="ids" value="">'
+    . '</form>';
+
+$filterOptions = [
+    'current_month' => 'Bulan ini',
+    'previous_month' => 'Bulan sebelumnya',
+    'one_month_ago' => '1 bulan yang lalu',
+    'two_months_ago' => '2 bulan yang lalu',
+    'custom' => 'Custom filter tanggal',
+];
+
+$filterForm = '<form class="grid gap-4 lg:grid-cols-[220px_1fr_1fr_auto]" data-section-filter data-section="absensi">'
+    . ui_select('filter', 'Periode Aktif', $filterOptions, $filterPreset)
+    . ui_input('start_date', 'Tanggal Awal', $startDate, 'date')
+    . ui_input('end_date', 'Tanggal Akhir', $endDate, 'date')
+    . '<div class="flex items-end">' . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary']) . '</div>'
+    . '</form>';
+
+$rangeLabel = date('d M Y', strtotime($startDate)) . ' - ' . date('d M Y', strtotime($endDate));
+
 echo '<div class="grid gap-4 xl:grid-cols-5">'
-    . ui_stat('Hadir', (string) $statsMap['hadir'], 'Status hadir bulan ini', 'emerald')
-    . ui_stat('Sakit', (string) $statsMap['sakit'], 'Status sakit bulan ini', 'sky')
-    . ui_stat('Izin', (string) $statsMap['izin'], 'Status izin bulan ini', 'amber')
-    . ui_stat('Cuti', (string) $statsMap['cuti'], 'Status cuti bulan ini', 'sky')
-    . ui_stat('Alpa', (string) $statsMap['alpa'], 'Status alpa bulan ini', 'rose')
+    . ui_stat('Hadir', (string) $statsMap['hadir'], 'Status hadir periode aktif', 'emerald')
+    . ui_stat('Sakit', (string) $statsMap['sakit'], 'Status sakit periode aktif', 'sky')
+    . ui_stat('Izin', (string) $statsMap['izin'], 'Status izin periode aktif', 'amber')
+    . ui_stat('Cuti', (string) $statsMap['cuti'], 'Status cuti periode aktif', 'sky')
+    . ui_stat('Alpa', (string) $statsMap['alpa'], 'Status alpa periode aktif', 'rose')
     . '</div>';
 
 echo '<div class="mt-6 space-y-6">';
 echo ui_panel('Upload Absensi', $uploadForm, ['subtitle' => 'Mirror dari import Excel lama. File CSV/XLSX akan diparsing lalu membuat user/master gaji bila belum ada.']);
-echo ui_panel('Riwayat Absensi', ui_table(
-    ['Nama', 'Jabatan', 'Tanggal', 'Status', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Telat', 'Potongan', 'Aksi'],
-    $tableRows !== '' ? $tableRows : '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">Belum ada data absensi.</td></tr>'
-), ['subtitle' => '80 data absensi terbaru untuk unit aktif']);
+echo ui_panel('Filter Periode Absensi', $filterForm, ['subtitle' => 'Default bulan sebelumnya. Gunakan custom untuk unit dengan periode payroll berbeda.']);
+echo ui_panel('Riwayat Absensi',
+    '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
+    . '<div class="flex flex-wrap gap-3">'
+    . ui_button('Tambah Absensi Manual', ['icon' => 'plus', 'variant' => 'primary', 'attrs' => ['data-open-modal' => $createModalId]])
+    . ui_button('Hapus Permanen', ['icon' => 'trash', 'variant' => 'danger', 'attrs' => ['data-bulk-delete' => '1', 'data-table-target' => $tableId, 'data-form-target' => $bulkDeleteFormId]])
+    . '</div>'
+    . '</div>'
+    . ui_table(
+    [['label' => '<input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Nama', 'Jabatan', 'Tanggal', 'Status', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Telat', 'Potongan', 'Aksi'],
+    $tableRows !== '' ? $tableRows : '<tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">Belum ada data absensi.</td></tr>',
+    ['numeric_columns' => [8, 9], 'storage_key' => 'absensi-history', 'search_column' => 1, 'table_id' => $tableId]
+) . $bulkDeleteForm, ['subtitle' => 'Semua data absensi unit aktif pada periode ' . $rangeLabel]);
 echo '</div>';
 echo $modals;

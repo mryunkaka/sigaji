@@ -14,6 +14,12 @@ function ui_icon(string $name, string $class = 'h-5 w-5'): string
         'printer' => '<path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2.25h12V9M6 18h12v3.75H6V18Zm-2.25-6.75h16.5A1.5 1.5 0 0 1 21.75 12.75v3A1.5 1.5 0 0 1 20.25 17.25H18V15H6v2.25H3.75A1.5 1.5 0 0 1 2.25 15.75v-3a1.5 1.5 0 0 1 1.5-1.5Z" />',
         'eye' => '<path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.644C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.433 0 .644C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />',
         'eye-slash' => '<path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18M10.477 10.488A3 3 0 0 0 13.5 13.5m2.09 2.122A9.956 9.956 0 0 1 12 16.5c-4.638 0-8.573-3.007-9.964-7.178a1.012 1.012 0 0 1 0-.644 9.968 9.968 0 0 1 4.307-5.247m3.249-1.147A10.048 10.048 0 0 1 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.433 0 .644a9.985 9.985 0 0 1-1.684 2.908M14.121 14.121 9.88 9.88" />',
+        'chevron-left' => '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />',
+        'chevron-right' => '<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5 15.75 12l-7.5 7.5" />',
+        'arrows-up-down' => '<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15 12 18.75 15.75 15M15.75 9 12 5.25 8.25 9" />',
+        'magnifying-glass' => '<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M16.5 10.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />',
+        'bars-3' => '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />',
+        'x-mark' => '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />',
     ];
 
     $path = $icons[$name] ?? $icons['home'];

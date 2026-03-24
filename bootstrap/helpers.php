@@ -45,6 +45,43 @@ function money($value): string
     return 'Rp ' . number_format((float) $value, 0, ',', '.');
 }
 
+function format_date_id(?string $value, bool $withTime = false): string
+{
+    if (!$value) {
+        return '-';
+    }
+
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return (string) $value;
+    }
+
+    $months = [
+        1 => 'Januari',
+        2 => 'Februari',
+        3 => 'Maret',
+        4 => 'April',
+        5 => 'Mei',
+        6 => 'Juni',
+        7 => 'Juli',
+        8 => 'Agustus',
+        9 => 'September',
+        10 => 'Oktober',
+        11 => 'November',
+        12 => 'Desember',
+    ];
+
+    $day = date('j', $timestamp);
+    $month = $months[(int) date('n', $timestamp)] ?? date('F', $timestamp);
+    $year = date('Y', $timestamp);
+
+    if ($withTime) {
+        return $day . ' ' . $month . ' ' . $year . ' ' . date('H:i', $timestamp);
+    }
+
+    return $day . ' ' . $month . ' ' . $year;
+}
+
 function now_string(): string
 {
     return date('Y-m-d H:i:s');

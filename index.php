@@ -70,12 +70,19 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
     </main>
 <?php else: ?>
     <div class="app-shell">
+        <div class="sidebar-backdrop" data-sidebar-backdrop></div>
+
         <aside class="app-sidebar">
             <div class="app-sidebar-inner">
-                <div class="rounded-[30px] bg-slate-900 p-5 text-white shadow-[0_24px_70px_rgba(15,23,42,.25)]">
-                    <p class="text-xs font-semibold tracking-[0.35em] text-slate-300">ACTIVE UNIT</p>
-                    <h1 class="mt-4 text-3xl font-semibold leading-tight"><?= e($unitName) ?></h1>
-                    <p class="mt-3 text-sm text-slate-300"><?= e($user['name']) ?> · <?= e($user['role']) ?></p>
+                <div class="flex items-start justify-between gap-3 rounded-[30px] bg-slate-900 p-5 text-white shadow-[0_24px_70px_rgba(15,23,42,.25)]">
+                    <div>
+                        <p class="text-xs font-semibold tracking-[0.35em] text-slate-300">UNIT AKTIF</p>
+                        <h1 class="mt-4 text-3xl font-semibold leading-tight"><?= e($unitName) ?></h1>
+                        <p class="mt-3 text-sm text-slate-300"><?= e($user['name']) ?> &middot; <?= e($user['role']) ?></p>
+                    </div>
+                    <button type="button" class="sidebar-toggle border-white/10 bg-white/10 text-white hover:bg-white/15" data-sidebar-close aria-label="Sembunyikan sidebar">
+                        <?= ui_icon('x-mark', 'h-5 w-5') ?>
+                    </button>
                 </div>
 
                 <nav class="sidebar-nav">
@@ -93,13 +100,21 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
 
         <main class="content-frame">
             <div class="soft-card mb-4 flex shrink-0 items-start justify-between gap-4 px-5 py-5 lg:mb-6 lg:px-8">
-                <div class="min-w-0">
-                    <p class="text-sm text-slate-500">Sistem Penggajian Native</p>
-                    <h2 id="page-title" class="mt-2 text-2xl font-semibold text-slate-900 lg:text-4xl">Dashboard</h2>
+                <div class="min-w-0 flex items-start gap-3">
+                    <button type="button" class="sidebar-toggle sidebar-toggle-mobile" data-sidebar-toggle aria-label="Tampilkan sidebar">
+                        <?= ui_icon('bars-3', 'h-5 w-5') ?>
+                    </button>
+                    <button type="button" class="sidebar-toggle sidebar-toggle-desktop" data-sidebar-toggle aria-label="Tampilkan sidebar">
+                        <?= ui_icon('bars-3', 'h-5 w-5') ?>
+                    </button>
+                    <div class="min-w-0">
+                        <p class="text-sm text-slate-500">Panel operasional absensi dan penggajian</p>
+                        <h2 id="page-title" class="mt-2 text-2xl font-semibold text-slate-900 lg:text-4xl">Dashboard</h2>
+                    </div>
                 </div>
                 <div class="text-right text-sm text-slate-500">
                     <p><?= e(date('d F Y')) ?></p>
-                    <p>AJAX + polling aktif</p>
+                    <p>Data unit aktif siap dikelola</p>
                 </div>
             </div>
 
@@ -109,7 +124,6 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
             </div>
         </main>
     </div>
-
 <?php endif; ?>
 <script src="<?= e(asset_url('assets/app.js')) ?>" defer></script>
 </body>

@@ -26,13 +26,28 @@ $latestPayroll = fetch_all(
 );
 
 $rows = '';
+$modals = '';
 foreach ($latestPayroll as $item) {
+    $viewModalId = 'dashboard-payroll-view-' . $item['id'];
     $rows .= '<tr>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
-        <td class="px-4 py-3">' . e($item['tanggal_awal_gaji']) . ' s/d ' . e($item['tanggal_akhir_gaji']) . '</td>
+        <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
         <td class="px-4 py-3">' . money($item['total_potongan']) . '</td>
+        <td class="px-4 py-3">' . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]]) . '</td>
     </tr>';
+
+    $viewBody = '<div class="space-y-6">'
+        . ui_detail_section('Ringkasan Payroll', [
+            'Karyawan' => e($item['name']),
+            'Periode Awal' => e(format_date_id($item['tanggal_awal_gaji'])),
+            'Periode Akhir' => e(format_date_id($item['tanggal_akhir_gaji'])),
+            'Gaji Bersih' => e(money($item['gaji_bersih'])),
+            'Total Potongan' => e(money($item['total_potongan'])),
+        ], 3)
+        . '</div>';
+
+    $modals .= ui_modal($viewModalId, 'Detail Payroll Terbaru', $viewBody, ['max_width' => 'max-w-4xl']);
 }
 
 echo '<div class="grid gap-4 xl:grid-cols-4">'
@@ -44,7 +59,9 @@ echo '<div class="grid gap-4 xl:grid-cols-4">'
 
 echo '<div class="mt-6">'
     . ui_panel('Penggajian Terbaru', ui_table(
-        ['Karyawan', 'Periode', 'Gaji Bersih', 'Total Potongan'],
-        $rows !== '' ? $rows : '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">Belum ada data penggajian.</td></tr>'
+        ['Karyawan', 'Periode', 'Gaji Bersih', 'Total Potongan', 'View'],
+        $rows !== '' ? $rows : '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Belum ada data penggajian.</td></tr>',
+        ['numeric_columns' => [2, 3], 'storage_key' => 'dashboard-payroll-latest']
     ), ['subtitle' => 'Ringkasan 10 payroll terbaru pada unit aktif']) .
     '</div>';
+echo $modals;
