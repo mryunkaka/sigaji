@@ -179,14 +179,14 @@ $generateForm = '<form action="ajax/generate_gaji.php" method="post" data-ajax-f
 $reportForm = $generatedPeriods === []
     ? '<div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">Belum ada payroll yang sudah digenerate pada filter periode ini.</div>'
     : '<form action="print_laporan.php" method="get" target="_blank" class="grid gap-4 lg:grid-cols-[1fr_auto]">'
-        . ui_select('period', 'Periode Generated', $periodOptions, $selectedPeriod, ['required' => 'required'])
-        . '<div class="flex items-end">' . ui_button('Cetak Laporan', ['type' => 'submit', 'variant' => 'secondary', 'icon' => 'printer']) . '</div>'
-        . '</form>';
+    . ui_select('period', 'Periode Generated', $periodOptions, $selectedPeriod, ['required' => 'required'])
+    . '<div class="flex items-end">' . ui_button('Cetak Laporan', ['type' => 'submit', 'variant' => 'secondary', 'icon' => 'printer']) . '</div>'
+    . '</form>';
 
 $rangeLabel = format_date_id($startDate) . ' - ' . format_date_id($endDate);
 
 echo '<div class="space-y-6">';
-echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Pilih periode kerja yang ingin dicek untuk generate dan laporan.']);
+echo ui_panel('Filter Periode Gajis', $filterForm, ['subtitle' => 'Pilih periode kerja yang ingin dicek untuk generate dan laporan.']);
 echo ui_panel('Generate Penggajian', $generateInfo . '<div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Periode aktif ' . $rangeLabel . '. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate pada rentang ini.']);
 echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Hanya periode payroll yang sudah digenerate pada filter aktif yang bisa dicetak.']);
 echo ui_panel('Daftar Penggajian', ui_table(
