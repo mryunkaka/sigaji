@@ -2,9 +2,15 @@
 
 final class AttendanceImportService
 {
-    public static function import(string $uploadedPath, int $unitId): array
+    public static function importUploadedFile(string $temporaryPath, string $originalName, int $unitId): array
     {
-        $ext = strtolower(pathinfo($uploadedPath, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        return self::import($temporaryPath, $unitId, $extension);
+    }
+
+    public static function import(string $uploadedPath, int $unitId, ?string $extension = null): array
+    {
+        $ext = strtolower($extension ?: pathinfo($uploadedPath, PATHINFO_EXTENSION));
         $rows = match ($ext) {
             'csv' => self::parseCsv($uploadedPath),
             'xlsx' => self::parseXlsx($uploadedPath),
@@ -17,6 +23,7 @@ final class AttendanceImportService
 
         $summary = [
             'imported' => 0,
+            'updated' => 0,
             'skipped' => 0,
             'errors' => [],
         ];
@@ -78,13 +85,56 @@ final class AttendanceImportService
 
                 $master = PayrollService::ensureMasterGaji((int) $user['id']);
                 $potonganRate = (int) round((float) ($master['potongan_terlambat'] ?? 1000));
-                $exists = fetch_one(
-                    'SELECT id FROM absensi WHERE user_id = :user_id AND tanggal = :tanggal LIMIT 1',
+                $payload = [
+                    'shift' => $shift,
+                    'tanggal' => $tanggal,
+                    'status' => $status,
+                    'jam_masuk' => $jamMasuk,
+                    'jam_keluar' => $jamKeluar,
+                    'total_menit_terlambat' => $totalTerlambat,
+                    'jumlah_potongan' => $totalTerlambat * $potonganRate,
+                    'keterangan_potongan' => $totalTerlambat > 0 ? "Terlambat {$totalTerlambat} menit" : '',
+                ];
+
+                $existing = fetch_one(
+                    'SELECT id, shift, tanggal, status, jam_masuk, jam_keluar, total_menit_terlambat, jumlah_potongan, keterangan_potongan
+                     FROM absensi
+                     WHERE user_id = :user_id AND tanggal = :tanggal
+                     LIMIT 1',
                     ['user_id' => $user['id'], 'tanggal' => $tanggal]
                 );
 
-                if ($exists) {
-                    $summary['skipped']++;
+                if ($existing) {
+                    if (self::isSameAttendance($existing, $payload)) {
+                        $summary['skipped']++;
+                        continue;
+                    }
+
+                    execute_query(
+                        'UPDATE absensi
+                         SET shift = :shift,
+                             status = :status,
+                             jam_masuk = :jam_masuk,
+                             jam_keluar = :jam_keluar,
+                             total_menit_terlambat = :total_menit_terlambat,
+                             jumlah_potongan = :jumlah_potongan,
+                             keterangan_potongan = :keterangan_potongan,
+                             updated_at = :updated_at
+                         WHERE id = :id',
+                        [
+                            'shift' => $payload['shift'],
+                            'status' => $payload['status'],
+                            'jam_masuk' => $payload['jam_masuk'],
+                            'jam_keluar' => $payload['jam_keluar'],
+                            'total_menit_terlambat' => $payload['total_menit_terlambat'],
+                            'jumlah_potongan' => $payload['jumlah_potongan'],
+                            'keterangan_potongan' => $payload['keterangan_potongan'],
+                            'updated_at' => now_string(),
+                            'id' => $existing['id'],
+                        ]
+                    );
+
+                    $summary['updated']++;
                     continue;
                 }
 
@@ -93,14 +143,14 @@ final class AttendanceImportService
                      VALUES (:user_id, :shift, :tanggal, :status, :jam_masuk, :jam_keluar, :terlambat, :jumlah_potongan, :keterangan_potongan, :created_at, :updated_at)',
                     [
                         'user_id' => $user['id'],
-                        'shift' => $shift,
-                        'tanggal' => $tanggal,
-                        'status' => $status,
-                        'jam_masuk' => $jamMasuk,
-                        'jam_keluar' => $jamKeluar,
-                        'terlambat' => $totalTerlambat,
-                        'jumlah_potongan' => $totalTerlambat * $potonganRate,
-                        'keterangan_potongan' => $totalTerlambat > 0 ? "Terlambat {$totalTerlambat} menit" : '',
+                        'shift' => $payload['shift'],
+                        'tanggal' => $payload['tanggal'],
+                        'status' => $payload['status'],
+                        'jam_masuk' => $payload['jam_masuk'],
+                        'jam_keluar' => $payload['jam_keluar'],
+                        'terlambat' => $payload['total_menit_terlambat'],
+                        'jumlah_potongan' => $payload['jumlah_potongan'],
+                        'keterangan_potongan' => $payload['keterangan_potongan'],
                         'created_at' => now_string(),
                         'updated_at' => now_string(),
                     ]
@@ -133,6 +183,10 @@ final class AttendanceImportService
 
     private static function parseXlsx(string $path): array
     {
+        if (!class_exists('ZipArchive')) {
+            throw new RuntimeException('Ekstensi ZipArchive PHP belum aktif, file XLSX belum bisa diproses.');
+        }
+
         $zip = new ZipArchive();
         if ($zip->open($path) !== true) {
             throw new RuntimeException('File XLSX tidak bisa dibuka.');
@@ -232,12 +286,39 @@ final class AttendanceImportService
         }
 
         if (is_numeric($value)) {
-            $seconds = (int) round(((float) $value % 1) * 86400);
+            $numeric = (float) $value;
+            $fraction = fmod($numeric, 1.0);
+            if ($fraction < 0) {
+                $fraction += 1.0;
+            }
+            $seconds = (int) round($fraction * 86400);
+            if ($seconds >= 86400) {
+                $seconds = 86399;
+            }
             return gmdate('H:i:s', $seconds);
         }
 
         $timestamp = strtotime((string) $value);
         return $timestamp ? date('H:i:s', $timestamp) : null;
+    }
+
+    private static function isSameAttendance(array $existing, array $payload): bool
+    {
+        $normalize = static function ($value): string {
+            if ($value === null || $value === '') {
+                return '';
+            }
+            return (string) $value;
+        };
+
+        return $normalize($existing['shift'] ?? null) === $normalize($payload['shift'] ?? null)
+            && $normalize($existing['tanggal'] ?? null) === $normalize($payload['tanggal'] ?? null)
+            && $normalize($existing['status'] ?? null) === $normalize($payload['status'] ?? null)
+            && $normalize($existing['jam_masuk'] ?? null) === $normalize($payload['jam_masuk'] ?? null)
+            && $normalize($existing['jam_keluar'] ?? null) === $normalize($payload['jam_keluar'] ?? null)
+            && (int) ($existing['total_menit_terlambat'] ?? 0) === (int) ($payload['total_menit_terlambat'] ?? 0)
+            && (int) ($existing['jumlah_potongan'] ?? 0) === (int) ($payload['jumlah_potongan'] ?? 0)
+            && $normalize($existing['keterangan_potongan'] ?? null) === $normalize($payload['keterangan_potongan'] ?? null);
     }
 
     private static function determineStatus(string $jamMasuk, string $jamKeluar, ?int $shift): string

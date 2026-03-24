@@ -19,7 +19,7 @@
 
 @layer components {
   .app-shell {
-    @apply h-screen overflow-hidden lg:flex;
+    @apply flex h-screen flex-col overflow-hidden lg:flex-row;
   }
 
   .app-sidebar {
@@ -27,7 +27,7 @@
   }
 
   .app-sidebar-inner {
-    @apply flex h-full flex-col gap-5 p-4 lg:p-6;
+    @apply flex h-full min-h-0 flex-col gap-4 p-3 sm:p-4 lg:gap-5 lg:p-6;
   }
 
   .sidebar-nav {
@@ -48,7 +48,7 @@
   }
 
   .nav-pill {
-    @apply flex min-w-max items-center gap-3 rounded-[24px] border border-transparent bg-white/70 px-4 py-3 text-left text-sm font-medium text-slate-700 transition duration-200 hover:border-slate-200 hover:bg-white lg:min-w-0;
+    @apply flex min-w-max items-center gap-3 rounded-[22px] border border-transparent bg-white/70 px-4 py-3 text-left text-sm font-medium text-slate-700 transition duration-200 hover:border-slate-200 hover:bg-white lg:min-w-0;
   }
 
   .nav-pill.active {
@@ -56,11 +56,11 @@
   }
 
   .content-frame {
-    @apply flex min-h-0 flex-1 flex-col overflow-hidden p-3 lg:p-6;
+    @apply flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4 lg:p-6;
   }
 
   .content-scroll {
-    @apply min-h-0 flex-1 overflow-y-auto pr-1;
+    @apply min-h-0 flex-1 overflow-y-auto pr-0 sm:pr-1;
   }
 
   .login-shell {
@@ -88,5 +88,13 @@
 
   .soft-card {
     @apply rounded-[28px] border border-white/90 bg-white/70 shadow-[0_20px_55px_rgba(15,23,42,.06)] backdrop-blur-sm;
+  }
+
+  .modal-overlay.is-open {
+    @apply flex;
+  }
+
+  .modal-card {
+    max-height: calc(100vh - 2rem);
   }
 }
