@@ -114,8 +114,8 @@ foreach ($payrolls as $item) {
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
         <td class="px-4 py-3">
             <div class="flex flex-wrap gap-2">
-                ' . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]]) . '
-                <a href="print_slip.php?id=' . e($item['id']) . '" target="_blank">' . ui_button('Slip', ['icon' => 'printer', 'variant' => 'secondary']) . '</a>
+                ' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '
+                <a href="print_slip.php?id=' . e($item['id']) . '" target="_blank">' . ui_button('Slip', ['icon' => 'printer', 'variant' => 'secondary', 'icon_only' => true]) . '</a>
             </div>
         </td>
     </tr>';

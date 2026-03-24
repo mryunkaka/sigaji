@@ -93,18 +93,21 @@ $employees = fetch_all(
 );
 
 $renderEmployeeSelect = static function (string $name, string $label, array $employees, $selected = null): string {
+    static $employeeSelectCounter = 0;
+    $employeeSelectCounter++;
+    $id = 'field-' . preg_replace('/[^a-z0-9_-]+/i', '-', $name) . '-' . $employeeSelectCounter;
     $options = '<option value="">Pilih Karyawan</option>';
     foreach ($employees as $employee) {
         $isSelected = (string) $employee['id'] === (string) $selected ? ' selected' : '';
         $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
     }
 
-    return '<label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">' . e($label) . '</span>
-        <select name="' . e($name) . '" class="w-full rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" required data-absensi-calc>
+    return '<div class="block">
+        <label for="' . e($id) . '" class="mb-2 block text-sm font-medium text-slate-700">' . e($label) . '</label>
+        <select id="' . e($id) . '" name="' . e($name) . '" class="w-full rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" required data-absensi-calc>
             ' . $options . '
         </select>
-    </label>';
+    </div>';
 };
 
 $renderAbsensiForm = static function (array $employees, array $statusOptions, array $item, string $modalId, bool $isCreate = false) use ($renderEmployeeSelect): string {
@@ -150,20 +153,20 @@ foreach ($records as $item) {
     };
 
     $tableRows .= '<tr>
-        <td class="px-4 py-3"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
-        <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
-        <td class="px-4 py-3">' . e($item['jabatan'] ?? '-') . '</td>
-        <td class="px-4 py-3" data-sort-value="' . e($item['tanggal']) . '">' . e(format_date_id($item['tanggal'])) . '</td>
+        <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
+        <td class="px-4 py-3 font-medium text-slate-900" title="' . e($item['name']) . '">' . e($item['name']) . '</td>
+        <td class="px-4 py-3" title="' . e($item['jabatan'] ?? '-') . '">' . e($item['jabatan'] ?? '-') . '</td>
+        <td class="whitespace-nowrap px-4 py-3" style="max-width:none;min-width:245px;overflow:visible;text-overflow:clip;" data-sort-value="' . e($item['tanggal']) . '" title="' . e(format_date_id($item['tanggal'], false, true)) . '">' . e(format_date_id($item['tanggal'], false, true)) . '</td>
         <td class="px-4 py-3">' . ui_badge(ucfirst($item['status']), $badgeTone) . '</td>
         <td class="px-4 py-3">' . e($item['shift'] ?: '-') . '</td>
         <td class="px-4 py-3">' . e($item['jam_masuk'] ?: '-') . '</td>
         <td class="px-4 py-3">' . e($item['jam_keluar'] ?: '-') . '</td>
         <td class="px-4 py-3">' . (int) $item['total_menit_terlambat'] . '</td>
-        <td class="px-4 py-3">' . money($item['jumlah_potongan']) . '</td>
-        <td class="px-4 py-3">
-            <div class="flex flex-wrap gap-2">
-                ' . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]]) . '
-                ' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]]) . '
+        <td class="px-4 py-3" title="' . e(money($item['jumlah_potongan'])) . '">' . money($item['jumlah_potongan']) . '</td>
+        <td class="max-w-none whitespace-nowrap px-4 py-3">
+            <div class="flex flex-nowrap items-center gap-2">
+                ' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '
+                ' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $modalId]]) . '
             </div>
         </td>
     </tr>';
@@ -211,9 +214,10 @@ $modals .= ui_modal($createModalId, 'Tambah Absensi Manual', $renderAbsensiForm(
     'potongan_khusus' => 0,
 ], $createModalId, true));
 
+$uploadInputId = 'absensi-upload-file';
 $uploadForm = '<form action="ajax/upload_absen.php" method="post" enctype="multipart/form-data" data-ajax-form class="grid gap-4 md:grid-cols-[1fr_auto]">'
     . csrf_input()
-    . '<label class="block"><span class="mb-2 block text-sm font-medium text-slate-700">File Absensi</span><input type="file" name="file" accept=".csv,.xlsx" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"></label>'
+    . '<div class="block"><label for="' . e($uploadInputId) . '" class="mb-2 block text-sm font-medium text-slate-700">File Absensi</label><input id="' . e($uploadInputId) . '" type="file" name="file" accept=".csv,.xlsx" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"></div>'
     . '<div class="flex items-end">' . ui_button('Upload Absensi', ['type' => 'submit', 'variant' => 'success', 'icon' => 'arrow-up-tray']) . '</div>'
     . '</form>';
 
@@ -259,7 +263,7 @@ echo ui_panel('Riwayat Absensi',
     . '</div>'
     . '</div>'
     . ui_table(
-    [['label' => '<input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Nama', 'Jabatan', 'Tanggal', 'Status', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Telat', 'Potongan', 'Aksi'],
+    [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Nama', 'Jabatan', 'Tanggal', 'Status', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Telat', 'Potongan', 'Aksi'],
     $tableRows !== '' ? $tableRows : '<tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">Belum ada data absensi.</td></tr>',
     ['numeric_columns' => [8, 9], 'storage_key' => 'absensi-history', 'search_column' => 1, 'table_id' => $tableId]
 ) . $bulkDeleteForm, ['subtitle' => 'Semua data absensi unit aktif pada periode ' . $rangeLabel]);

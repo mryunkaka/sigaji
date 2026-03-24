@@ -50,13 +50,7 @@ $owner = fetch_one(
 
 $slipNumber = 'SLIP/' . $item['id'] . '/' . date('m', strtotime($item['tanggal_awal_gaji'])) . '/' . date('Y', strtotime($item['tanggal_awal_gaji']));
 $gajiBersihText = ucwords(trim(terbilang_id((int) $item['gaji_bersih']))) . ' rupiah';
-$logoPath = null;
-if (!empty($item['logo_unit'])) {
-    $candidate = __DIR__ . '/public/storage/' . ltrim((string) $item['logo_unit'], '/');
-    if (is_file($candidate)) {
-        $logoPath = $candidate;
-    }
-}
+$logoPath = public_asset_path($item['logo_unit'] ?? null);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -65,26 +59,27 @@ if (!empty($item['logo_unit'])) {
     <title>Slip Gaji - <?= e($item['nama_unit']) ?></title>
     <style>
         @page { size: A4 landscape; margin: 10mm; }
-        body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; margin: 0; }
+        html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; margin: 0; background: #e5e7eb; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .print-actions { margin-bottom: 12px; }
         .print-actions button { background: #0f172a; color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
-        .slip { border: 1px solid #111827; padding: 10px; }
+        .slip { border: 1px solid #111827; padding: 10px; background: #ffffff; }
         .header-table, .info-table, .main-table, .summary-table, .detail-table, .notes-table { width: 100%; border-collapse: collapse; }
         .header-table td, .info-table td { padding: 4px 6px; vertical-align: top; }
         .main-table td, .main-table th, .summary-table td, .summary-table th, .detail-table td, .detail-table th, .notes-table td, .notes-table th { border: 1px solid #111827; padding: 5px 6px; vertical-align: top; }
         .logo-box { width: 88px; text-align: center; }
         .logo-box img { max-width: 74px; max-height: 74px; }
         .company-name { font-size: 24px; font-weight: bold; text-align: center; }
-        .section-title { background: #e5e7eb; font-weight: bold; text-transform: uppercase; }
+        .section-title { background: #dbeafe; font-weight: bold; text-transform: uppercase; }
         .right { text-align: right; }
         .center { text-align: center; }
-        .total-row { font-weight: bold; background: #f3f4f6; }
+        .total-row { font-weight: bold; background: #ecfccb; }
         .signature { margin-top: 18px; width: 100%; }
         .signature td { border: none; padding-top: 20px; }
         .small { font-size: 10px; color: #4b5563; }
         @media print {
             .print-actions { display: none; }
-            body { margin: 0; }
+            body { margin: 0; background: #ffffff; }
         }
     </style>
 </head>
@@ -114,7 +109,7 @@ if (!empty($item['logo_unit'])) {
             </tr>
         </table>
 
-        <table class="info-table" style="margin-top: 8px;">
+        <table class="info-table" style="margin-top: 8px; background:#f8fafc; border:1px solid #111827;">
             <tr>
                 <td width="14%">NIK</td>
                 <td width="36%">: <?= e($item['nik'] ?: '-') ?></td>
@@ -248,7 +243,7 @@ if (!empty($item['logo_unit'])) {
                     </table>
                 </td>
                 <td width="66.66%" style="padding-left: 10px;">
-                    <div style="padding: 14px 12px;">
+                    <div style="padding: 14px 12px; background:#ecfccb; border:1px solid #65a30d;">
                         <div style="font-size: 22px; font-weight: bold;">Total diterima: <?= money($item['gaji_bersih']) ?></div>
                         <div class="small" style="margin-top: 6px;"><em>Terbilang: <?= e($gajiBersihText) ?></em></div>
                         <div class="small" style="margin-top: 8px;"><?= e($item['alamat'] ?: '-') ?></div>

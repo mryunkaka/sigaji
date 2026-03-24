@@ -73,11 +73,15 @@
   }
 
   .content-frame {
-    @apply flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4 lg:p-6;
+    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-4 lg:p-6;
   }
 
   .content-scroll {
-    @apply min-h-0 flex-1 overflow-y-auto pr-0 sm:pr-1;
+    @apply min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-0 sm:pr-1;
+  }
+
+  .content-scroll > * {
+    @apply min-w-0;
   }
 
   .sidebar-toggle {

@@ -121,6 +121,8 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
                     <button class="nav-link nav-pill" data-section="absensi"><?= ui_icon('calendar', 'h-5 w-5') ?> Absensi</button>
                     <button class="nav-link nav-pill" data-section="validasi"><?= ui_icon('check-circle', 'h-5 w-5') ?> Validasi</button>
                     <button class="nav-link nav-pill" data-section="gaji"><?= ui_icon('banknotes', 'h-5 w-5') ?> Gaji</button>
+                    <button class="nav-link nav-pill" data-section="users"><?= ui_icon('users', 'h-5 w-5') ?> User</button>
+                    <button class="nav-link nav-pill" data-section="units"><?= ui_icon('building-office-2', 'h-5 w-5') ?> Unit</button>
                 </nav>
 
                 <div class="pt-1">

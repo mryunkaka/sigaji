@@ -47,6 +47,8 @@ Sistem baru:
 
 - `index.php`: entry point login + single page shell
 - `ajax/`: seluruh content section dan action AJAX
+- `ajax/users.php`: modul CRUD user native
+- `ajax/units.php`: modul CRUD unit native
 - `components/`: button, modal, table, icon, panel, field, badge, stat
 - `services/`: auth, import absensi, payroll calculation
 - `bootstrap/`: bootstrap app, helper, session, db
@@ -77,6 +79,5 @@ Sistem baru:
 
 ## Belum Dimirror Sepenuhnya
 
-- Halaman `User` native untuk CRUD karyawan masih belum ada.
-- Halaman `Unit` native untuk CRUD unit masih belum ada.
 - Detail slip dan laporan sekarang sudah dibuat lebih dekat ke format project lama, tetapi field rekening/bank tidak dimunculkan karena schema `hark8423_gaji.sql` tidak memiliki kolom tersebut.
+- Modul upload foto user dan logo unit memakai penyimpanan sederhana `public/uploads`, belum memakai media manager seperti project Laravel lama.

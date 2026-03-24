@@ -21,6 +21,8 @@ function ui_icon(string $name, string $class = 'h-5 w-5'): string
         'bars-3' => '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />',
         'x-mark' => '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />',
         'arrow-path' => '<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356m-4.992 4.992a9 9 0 1 0 2.869 8.063M3 12a9 9 0 0 1 15.462-6.363l2.538-2.538" />',
+        'users' => '<path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.742-.479 3 3 0 0 0-4.682-2.72m.94 3.198v-.75c0-1.285-.57-2.48-1.56-3.285m0 0A5.97 5.97 0 0 0 12 13.5a5.97 5.97 0 0 0-4.44 1.934m8.88 0A5.97 5.97 0 0 1 12 16.5a5.97 5.97 0 0 1-4.44-1.066m0 0A5.971 5.971 0 0 0 6 18.75v.75m1.56-4.816a3 3 0 1 0-4.68 2.72A9.094 9.094 0 0 0 6 18.72m1.56-4.816a5.971 5.971 0 0 1 8.88 0M15 7.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />',
+        'building-office-2' => '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15A1.5 1.5 0 0 1 21 4.5v16.5H3V4.5A1.5 1.5 0 0 1 4.5 3Zm3 4.5h3v3h-3v-3Zm0 6h3v3h-3v-3Zm6-6h3v3h-3v-3Zm0 6h3v3h-3v-3Z" />',
     ];
 
     $path = $icons[$name] ?? $icons['home'];

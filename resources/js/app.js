@@ -92,13 +92,29 @@
   setSidebarState(getDefaultSidebarState());
 
   const showAppLoader = () => {
-    appLoader?.classList.remove('hidden');
+    if (!appLoader) {
+      return;
+    }
+    appLoader.style.display = 'flex';
+    appLoader.classList.remove('hidden');
     document.body.classList.add('app-loading');
   };
 
   const hideAppLoader = () => {
-    appLoader?.classList.add('hidden');
+    if (!appLoader) {
+      return;
+    }
+    appLoader.classList.add('hidden');
+    window.setTimeout(() => {
+      appLoader.style.display = 'none';
+    }, 220);
     document.body.classList.remove('app-loading');
+  };
+
+  const finishAppLoader = () => {
+    setLoaderStep('ready', 'done');
+    setLoaderProgress(100, 'Semua asset, komponen, dan data berhasil dimuat.');
+    window.setTimeout(hideAppLoader, 180);
   };
 
   const setLoaderProgress = (value, status = null) => {
@@ -401,9 +417,7 @@
     } finally {
       pageContent.classList.remove('page-busy');
       if (document.readyState === 'complete') {
-        setLoaderStep('ready', 'done');
-        setLoaderProgress(100, 'Semua asset, komponen, dan data berhasil dimuat.');
-        window.setTimeout(hideAppLoader, 180);
+        finishAppLoader();
       }
     }
   };
@@ -628,9 +642,7 @@
     setLoaderStep('assets', 'active');
     setLoaderProgress(28, 'Asset stylesheet dan script siap digunakan...');
     if (appReady) {
-      setLoaderStep('ready', 'done');
-      setLoaderProgress(100, 'Semua asset, komponen, dan data berhasil dimuat.');
-      window.setTimeout(hideAppLoader, 180);
+      finishAppLoader();
       return;
     }
     showAppLoader();

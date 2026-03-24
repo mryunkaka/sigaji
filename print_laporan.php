@@ -25,13 +25,7 @@ $items = fetch_all(
 );
 
 $unit = fetch_one('SELECT * FROM units WHERE id = :id', ['id' => $user['unit_id']]);
-$logoPath = null;
-if (!empty($unit['logo_unit'])) {
-    $candidate = __DIR__ . '/public/storage/' . ltrim((string) $unit['logo_unit'], '/');
-    if (is_file($candidate)) {
-        $logoPath = $candidate;
-    }
-}
+$logoPath = public_asset_path($unit['logo_unit'] ?? null);
 
 $totals = [
     'hadir' => 0, 'izin' => 0, 'alpa' => 0, 'sakit' => 0, 'off' => 0,
@@ -96,9 +90,11 @@ foreach ($items as $index => $item) {
     <title>Laporan Penggajian - <?= e($unit['nama_unit'] ?? 'Unit') ?></title>
     <style>
         @page { size: A4 landscape; margin: 8mm; }
-        body { font-family: Arial, sans-serif; font-size: 9px; color: #111827; margin: 0; }
+        html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: Arial, sans-serif; font-size: 9px; color: #111827; margin: 0; background: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .print-actions { margin-bottom: 12px; }
         .print-actions button { background: #0f172a; color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+        .sheet { background: #ffffff; padding: 10px; border: 1px solid #cbd5e1; }
         .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 12px; }
         .logo img { max-height: 52px; max-width: 80px; }
         .company-name { font-size: 16px; font-weight: bold; }
@@ -109,7 +105,11 @@ foreach ($items as $index => $item) {
         tfoot th { background: #111827; color: #fff; }
         .right { text-align: right; }
         .left { text-align: left; }
-        @media print { .print-actions { display: none; } }
+        @media print {
+            .print-actions { display: none; }
+            body { background: #ffffff; }
+            .sheet { border: 0; padding: 0; }
+        }
     </style>
 </head>
 <body>
@@ -117,105 +117,107 @@ foreach ($items as $index => $item) {
         <button onclick="window.print()">Print Laporan</button>
     </div>
 
-    <div class="header">
-        <div class="logo">
-            <?php if ($logoPath): ?>
-                <img src="data:image/png;base64,<?= base64_encode((string) file_get_contents($logoPath)) ?>" alt="Logo Unit">
-            <?php endif; ?>
+    <div class="sheet">
+        <div class="header">
+            <div class="logo">
+                <?php if ($logoPath): ?>
+                    <img src="data:image/png;base64,<?= base64_encode((string) file_get_contents($logoPath)) ?>" alt="Logo Unit">
+                <?php endif; ?>
+            </div>
+            <div style="text-align:right;">
+                <div class="company-name"><?= e($unit['nama_unit'] ?? '-') ?></div>
+                <div><?= e($unit['alamat_unit'] ?? '-') ?></div>
+                <div>Telepon: <?= e($unit['no_hp_unit'] ?? '-') ?></div>
+            </div>
         </div>
-        <div style="text-align:right;">
-            <div class="company-name"><?= e($unit['nama_unit'] ?? '-') ?></div>
-            <div><?= e($unit['alamat_unit'] ?? '-') ?></div>
-            <div>Telepon: <?= e($unit['no_hp_unit'] ?? '-') ?></div>
-        </div>
-    </div>
 
-    <h2 style="margin:0 0 6px 0;">Laporan Penggajian</h2>
-    <p style="margin:0 0 10px 0;">Periode: <?= e(format_date_id($tanggalAwal)) ?> hingga <?= e(format_date_id($tanggalAkhir)) ?></p>
+        <h2 style="margin:0 0 6px 0;">Laporan Penggajian</h2>
+        <p style="margin:0 0 10px 0;">Periode: <?= e(format_date_id($tanggalAwal)) ?> hingga <?= e(format_date_id($tanggalAkhir)) ?></p>
 
-    <table>
-        <thead>
-            <tr>
-                <th>No</th>
-                <th>Nama Karyawan</th>
-                <th>Hadir</th>
-                <th>Izin</th>
-                <th>Alpa</th>
-                <th>Sakit</th>
-                <th>Off</th>
-                <th>Gaji Pokok</th>
-                <th>Tunjangan BBM</th>
-                <th>Tunjangan Makan</th>
-                <th>Tunjangan Jabatan</th>
-                <th>Tunjangan Kehadiran</th>
-                <th>Tunjangan Lainnya</th>
-                <th>Lembur</th>
-                <th>Pot. Kehadiran</th>
-                <th>Pot. Ijin</th>
-                <th>Pot. Khusus</th>
-                <th>Pot. Telat</th>
-                <th>Pot. BPJS JHT</th>
-                <th>Pot. BPJS KES</th>
-                <th>Gaji Kotor</th>
-                <th>Gaji Bersih</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (!$rows): ?>
-                <tr><td colspan="22">Tidak ada data penggajian dalam periode ini.</td></tr>
-            <?php endif; ?>
-            <?php foreach ($rows as $row): ?>
+        <table>
+            <thead>
                 <tr>
-                    <td><?= e((string) $row['no']) ?></td>
-                    <td class="left"><?= e($row['name']) ?></td>
-                    <td><?= e((string) $row['hadir']) ?></td>
-                    <td><?= e((string) $row['izin']) ?></td>
-                    <td><?= e((string) $row['alpa']) ?></td>
-                    <td><?= e((string) $row['sakit']) ?></td>
-                    <td><?= e((string) $row['off']) ?></td>
-                    <td class="right"><?= number_format($row['gaji_pokok'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['tunjangan_bbm'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['tunjangan_makan'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['tunjangan_jabatan'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['tunjangan_kehadiran'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['tunjangan_lainnya'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['lembur'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['potongan_kehadiran'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['potongan_ijin'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['potongan_khusus'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['potongan_terlambat'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['pot_bpjs_jht'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['pot_bpjs_kes'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['gaji_kotor'], 0, ',', '.') ?></td>
-                    <td class="right"><?= number_format($row['gaji_bersih'], 0, ',', '.') ?></td>
+                    <th>No</th>
+                    <th>Nama Karyawan</th>
+                    <th>Hadir</th>
+                    <th>Izin</th>
+                    <th>Alpa</th>
+                    <th>Sakit</th>
+                    <th>Off</th>
+                    <th>Gaji Pokok</th>
+                    <th>Tunjangan BBM</th>
+                    <th>Tunjangan Makan</th>
+                    <th>Tunjangan Jabatan</th>
+                    <th>Tunjangan Kehadiran</th>
+                    <th>Tunjangan Lainnya</th>
+                    <th>Lembur</th>
+                    <th>Pot. Kehadiran</th>
+                    <th>Pot. Ijin</th>
+                    <th>Pot. Khusus</th>
+                    <th>Pot. Telat</th>
+                    <th>Pot. BPJS JHT</th>
+                    <th>Pot. BPJS KES</th>
+                    <th>Gaji Kotor</th>
+                    <th>Gaji Bersih</th>
                 </tr>
-            <?php endforeach; ?>
-        </tbody>
-        <tfoot>
-            <tr>
-                <th colspan="2">Total</th>
-                <th><?= e((string) $totals['hadir']) ?></th>
-                <th><?= e((string) $totals['izin']) ?></th>
-                <th><?= e((string) $totals['alpa']) ?></th>
-                <th><?= e((string) $totals['sakit']) ?></th>
-                <th><?= e((string) $totals['off']) ?></th>
-                <th><?= number_format($totals['gaji_pokok'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['tunjangan_bbm'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['tunjangan_makan'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['tunjangan_jabatan'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['tunjangan_kehadiran'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['tunjangan_lainnya'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['lembur'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['potongan_kehadiran'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['potongan_ijin'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['potongan_khusus'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['potongan_terlambat'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['pot_bpjs_jht'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['pot_bpjs_kes'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['gaji_kotor'], 0, ',', '.') ?></th>
-                <th><?= number_format($totals['gaji_bersih'], 0, ',', '.') ?></th>
-            </tr>
-        </tfoot>
-    </table>
+            </thead>
+            <tbody>
+                <?php if (!$rows): ?>
+                    <tr><td colspan="22">Tidak ada data penggajian dalam periode ini.</td></tr>
+                <?php endif; ?>
+                <?php foreach ($rows as $row): ?>
+                    <tr>
+                        <td><?= e((string) $row['no']) ?></td>
+                        <td class="left"><?= e($row['name']) ?></td>
+                        <td><?= e((string) $row['hadir']) ?></td>
+                        <td><?= e((string) $row['izin']) ?></td>
+                        <td><?= e((string) $row['alpa']) ?></td>
+                        <td><?= e((string) $row['sakit']) ?></td>
+                        <td><?= e((string) $row['off']) ?></td>
+                        <td class="right"><?= number_format($row['gaji_pokok'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['tunjangan_bbm'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['tunjangan_makan'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['tunjangan_jabatan'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['tunjangan_kehadiran'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['tunjangan_lainnya'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['lembur'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['potongan_kehadiran'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['potongan_ijin'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['potongan_khusus'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['potongan_terlambat'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['pot_bpjs_jht'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['pot_bpjs_kes'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['gaji_kotor'], 0, ',', '.') ?></td>
+                        <td class="right"><?= number_format($row['gaji_bersih'], 0, ',', '.') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="2">Total</th>
+                    <th><?= e((string) $totals['hadir']) ?></th>
+                    <th><?= e((string) $totals['izin']) ?></th>
+                    <th><?= e((string) $totals['alpa']) ?></th>
+                    <th><?= e((string) $totals['sakit']) ?></th>
+                    <th><?= e((string) $totals['off']) ?></th>
+                    <th><?= number_format($totals['gaji_pokok'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['tunjangan_bbm'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['tunjangan_makan'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['tunjangan_jabatan'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['tunjangan_kehadiran'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['tunjangan_lainnya'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['lembur'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['potongan_kehadiran'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['potongan_ijin'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['potongan_khusus'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['potongan_terlambat'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['pot_bpjs_jht'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['pot_bpjs_kes'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['gaji_kotor'], 0, ',', '.') ?></th>
+                    <th><?= number_format($totals['gaji_bersih'], 0, ',', '.') ?></th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
 </body>
 </html>

@@ -35,8 +35,8 @@ foreach ($masters as $item) {
         <td class="px-4 py-3">' . money($item['tunjangan_makan']) . '</td>
         <td class="px-4 py-3">' . money($item['tunjangan_jabatan']) . '</td>
         <td class="px-4 py-3"><div class="flex flex-wrap gap-2">'
-            . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]])
-            . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]])
+            . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]])
+            . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $modalId]])
             . '</div></td>
     </tr>';
 
@@ -90,8 +90,8 @@ foreach ($payrolls as $item) {
         <td class="px-4 py-3">' . money($item['potongan_khusus']) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
         <td class="px-4 py-3"><div class="flex flex-wrap gap-2">'
-            . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]])
-            . ui_button('Override', ['icon' => 'pencil', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $modalId]])
+            . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]])
+            . ui_button('Override', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $modalId]])
             . '</div></td>
     </tr>';
 

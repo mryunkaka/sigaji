@@ -45,7 +45,7 @@ function money($value): string
     return 'Rp ' . number_format((float) $value, 0, ',', '.');
 }
 
-function format_date_id(?string $value, bool $withTime = false): string
+function format_date_id(?string $value, bool $withTime = false, bool $withDayName = false): string
 {
     if (!$value) {
         return '-';
@@ -70,16 +70,27 @@ function format_date_id(?string $value, bool $withTime = false): string
         11 => 'November',
         12 => 'Desember',
     ];
+    $days = [
+        'Sunday' => 'Minggu',
+        'Monday' => 'Senin',
+        'Tuesday' => 'Selasa',
+        'Wednesday' => 'Rabu',
+        'Thursday' => 'Kamis',
+        'Friday' => 'Jumat',
+        'Saturday' => 'Sabtu',
+    ];
 
     $day = date('j', $timestamp);
     $month = $months[(int) date('n', $timestamp)] ?? date('F', $timestamp);
     $year = date('Y', $timestamp);
+    $dayName = $days[date('l', $timestamp)] ?? date('l', $timestamp);
+    $dateText = $withDayName ? ($dayName . ', ' . $day . ' ' . $month . ' ' . $year) : ($day . ' ' . $month . ' ' . $year);
 
     if ($withTime) {
-        return $day . ' ' . $month . ' ' . $year . ' ' . date('H:i', $timestamp);
+        return $dateText . ' ' . date('H:i', $timestamp);
     }
 
-    return $day . ' ' . $month . ' ' . $year;
+    return $dateText;
 }
 
 function terbilang_id(int $value): string
@@ -250,4 +261,26 @@ function asset_url(string $path): string
     $fullPath = __DIR__ . '/../public/' . $path;
     $version = is_file($fullPath) ? filemtime($fullPath) : time();
     return $path . '?v=' . $version;
+}
+
+function public_asset_path(?string $path): ?string
+{
+    $path = trim((string) $path);
+    if ($path === '') {
+        return null;
+    }
+
+    $normalized = str_replace('\\', '/', $path);
+    $candidates = [
+        __DIR__ . '/../public/' . ltrim($normalized, '/'),
+        __DIR__ . '/../public/storage/' . ltrim($normalized, '/'),
+    ];
+
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
 }

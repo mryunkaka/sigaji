@@ -34,7 +34,7 @@ foreach ($latestPayroll as $item) {
         <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
         <td class="px-4 py-3">' . money($item['total_potongan']) . '</td>
-        <td class="px-4 py-3">' . ui_button('View', ['icon' => 'eye', 'variant' => 'secondary', 'attrs' => ['data-open-modal' => $viewModalId]]) . '</td>
+        <td class="px-4 py-3">' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '</td>
     </tr>';
 
     $viewBody = '<div class="space-y-6">'
