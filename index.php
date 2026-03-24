@@ -35,55 +35,38 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
 <body>
 <?php if (!$user): ?>
     <main class="login-shell">
-        <div class="login-card">
-            <section class="login-hero">
-                <div class="mx-auto flex h-full w-full max-w-xl flex-col">
-                    <p class="inline-flex w-max rounded-full bg-white/10 px-4 py-2 text-xs font-semibold tracking-[0.3em] text-slate-100">SIGAJI NATIVE</p>
-                    <h1 class="mt-8 max-w-2xl text-4xl font-semibold leading-tight xl:text-6xl">Mirror penggajian lama ke PHP Native dengan tampilan yang lebih tegas dan bersih.</h1>
-                    <p class="mt-6 max-w-xl text-base leading-8 text-slate-300 xl:text-lg">Single page, sidebar tetap, upload absensi, validasi payroll, generate gaji, dan slip print tanpa Laravel atau Filament.</p>
-                    <div class="mt-auto grid gap-4 pt-10 xl:grid-cols-2">
-                        <div class="rounded-[30px] border border-white/10 bg-white/10 p-6">
-                            <div class="mb-3 text-emerald-300"><?= ui_icon('calendar', 'h-6 w-6') ?></div>
-                            <h2 class="text-xl font-semibold">Absensi</h2>
-                            <p class="mt-2 text-sm text-slate-300">Upload file lalu sistem hitung hadir, izin, sakit, cuti, alfa, dan keterlambatan.</p>
-                        </div>
-                        <div class="rounded-[30px] border border-white/10 bg-white/10 p-6">
-                            <div class="mb-3 text-sky-300"><?= ui_icon('banknotes', 'h-6 w-6') ?></div>
-                            <h2 class="text-xl font-semibold">Payroll</h2>
-                            <p class="mt-2 text-sm text-slate-300">Generate penggajian per periode sesuai rumus existing, lalu validasi manual seperlunya.</p>
-                        </div>
-                    </div>
+        <section class="login-single-wrap">
+            <div class="login-single-card">
+                <div class="text-center">
+                    <p class="text-xl font-bold uppercase tracking-tight text-slate-900 sm:text-2xl">Sistem Penggajian</p>
+                    <h2 class="mt-3 text-3xl font-semibold text-slate-900 sm:text-[4rem] sm:leading-none">Sign in</h2>
                 </div>
-            </section>
 
-            <section class="flex h-full items-center justify-center bg-white/90 px-5 py-6 sm:px-8 lg:px-10">
-                <div class="w-full max-w-xl rounded-[32px] border border-slate-200/70 bg-white/80 p-6 shadow-[0_22px_65px_rgba(15,23,42,.08)] backdrop-blur-sm sm:p-8 lg:p-10">
-                    <div class="mb-8 flex items-start justify-between gap-4">
-                        <div>
-                            <p class="text-xs font-semibold tracking-[0.3em] text-slate-500">LOGIN PANEL</p>
-                            <h2 class="mt-4 text-3xl font-semibold text-slate-900">Masuk ke sistem</h2>
-                            <p class="mt-2 text-sm leading-7 text-slate-500">Gunakan akun dari tabel `users` dan pilih unit aktif seperti flow lama.</p>
+                <?php if ($error !== ''): ?>
+                    <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><?= e($error) ?></div>
+                <?php endif; ?>
+
+                <form method="post" class="mt-7 space-y-5">
+                    <?= csrf_input() ?>
+                    <input type="hidden" name="action" value="login">
+                    <?= ui_input('login', 'Nama / Email*', request_value('login', ''), 'text', ['required' => 'required', 'autocomplete' => 'username']) ?>
+                    <label class="block">
+                        <span class="mb-2 block text-sm font-medium text-slate-700">Password*</span>
+                        <div class="relative">
+                            <input id="login-password" type="password" name="password" value="" required autocomplete="current-password" class="w-full rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 pr-14 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100">
+                            <button type="button" class="absolute inset-y-0 right-0 inline-flex w-12 items-center justify-center text-slate-400 transition hover:text-slate-600" data-toggle-password data-target="login-password" aria-label="Tampilkan password">
+                                <span data-password-icon="show"><?= ui_icon('eye', 'h-5 w-5') ?></span>
+                                <span data-password-icon="hide" class="hidden"><?= ui_icon('eye-slash', 'h-5 w-5') ?></span>
+                            </button>
                         </div>
-                        <div class="hidden rounded-[24px] bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 sm:block">PHP Native</div>
+                    </label>
+                    <?= ui_select('unit_id', 'Pilih Unit*', array_column($units, 'nama_unit', 'id'), request_value('unit_id', $units[0]['id'] ?? null), ['required' => 'required']) ?>
+                    <div class="pt-2">
+                        <?= ui_button('Sign in', ['type' => 'submit', 'variant' => 'warning', 'class' => 'w-full']) ?>
                     </div>
-
-                    <?php if ($error !== ''): ?>
-                        <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><?= e($error) ?></div>
-                    <?php endif; ?>
-
-                    <form method="post" class="mt-8 space-y-5">
-                        <?= csrf_input() ?>
-                        <input type="hidden" name="action" value="login">
-                        <?= ui_input('login', 'Nama / Email', request_value('login', ''), 'text', ['required' => 'required', 'autocomplete' => 'username']) ?>
-                        <?= ui_input('password', 'Password', '', 'password', ['required' => 'required', 'autocomplete' => 'current-password']) ?>
-                        <?= ui_select('unit_id', 'Pilih Unit', array_column($units, 'nama_unit', 'id'), request_value('unit_id', $units[0]['id'] ?? null), ['required' => 'required']) ?>
-                        <div class="pt-2">
-                            <?= ui_button('Masuk', ['type' => 'submit', 'variant' => 'success']) ?>
-                        </div>
-                    </form>
-                </div>
-            </section>
-        </div>
+                </form>
+            </div>
+        </section>
     </main>
 <?php else: ?>
     <div class="app-shell">
@@ -127,7 +110,7 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
         </main>
     </div>
 
-    <script src="<?= e(asset_url('assets/app.js')) ?>" defer></script>
 <?php endif; ?>
+<script src="<?= e(asset_url('assets/app.js')) ?>" defer></script>
 </body>
 </html>

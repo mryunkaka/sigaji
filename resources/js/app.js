@@ -1,4 +1,36 @@
 (() => {
+  document.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-toggle-password]');
+    if (toggle) {
+      const target = document.getElementById(toggle.dataset.target);
+      if (!target) {
+        return;
+      }
+
+      const hidden = target.type === 'password';
+      target.type = hidden ? 'text' : 'password';
+      toggle.querySelector('[data-password-icon="show"]')?.classList.toggle('hidden', hidden);
+      toggle.querySelector('[data-password-icon="hide"]')?.classList.toggle('hidden', !hidden);
+      toggle.setAttribute('aria-label', hidden ? 'Sembunyikan password' : 'Tampilkan password');
+      return;
+    }
+
+    const nav = event.target.closest('.nav-link');
+    if (nav) {
+      loadSection(nav.dataset.section);
+    }
+
+    const openModal = event.target.closest('[data-open-modal]');
+    if (openModal) {
+      document.getElementById(openModal.dataset.openModal)?.classList.remove('hidden');
+    }
+
+    const closeModal = event.target.closest('[data-close-modal]');
+    if (closeModal) {
+      document.getElementById(closeModal.dataset.closeModal)?.classList.add('hidden');
+    }
+  });
+
   const pageContent = document.getElementById('page-content');
   const pageTitle = document.getElementById('page-title');
   const toast = document.getElementById('toast');
@@ -52,23 +84,6 @@
       }
     }
   };
-
-  document.addEventListener('click', (event) => {
-    const nav = event.target.closest('.nav-link');
-    if (nav) {
-      loadSection(nav.dataset.section);
-    }
-
-    const openModal = event.target.closest('[data-open-modal]');
-    if (openModal) {
-      document.getElementById(openModal.dataset.openModal)?.classList.remove('hidden');
-    }
-
-    const closeModal = event.target.closest('[data-close-modal]');
-    if (closeModal) {
-      document.getElementById(closeModal.dataset.closeModal)?.classList.add('hidden');
-    }
-  });
 
   document.addEventListener('submit', (event) => {
     const form = event.target;
