@@ -20,6 +20,7 @@ function ui_icon(string $name, string $class = 'h-5 w-5'): string
         'magnifying-glass' => '<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M16.5 10.5a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z" />',
         'bars-3' => '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />',
         'x-mark' => '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />',
+        'arrow-path' => '<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356m-4.992 4.992a9 9 0 1 0 2.869 8.063M3 12a9 9 0 0 1 15.462-6.363l2.538-2.538" />',
     ];
 
     $path = $icons[$name] ?? $icons['home'];

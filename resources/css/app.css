@@ -15,6 +15,10 @@
       radial-gradient(circle at top left, rgba(255,255,255,.95) 0, rgba(255,255,255,.7) 22%, rgba(238,243,248,1) 58%),
       linear-gradient(135deg, #eef3f8 0%, #e6edf5 100%);
   }
+
+  body.app-loading {
+    @apply overflow-hidden;
+  }
 }
 
 @layer components {
@@ -113,6 +117,56 @@
 
   .soft-card {
     @apply rounded-[28px] border border-white/90 bg-white/70 shadow-[0_20px_55px_rgba(15,23,42,.06)] backdrop-blur-sm;
+  }
+
+  .app-loader {
+    @apply fixed inset-0 z-[70] flex items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,.98),rgba(238,243,248,.96))] transition duration-300;
+  }
+
+  .app-loader.hidden {
+    @apply pointer-events-none opacity-0;
+  }
+
+  .app-loader-card {
+    @apply flex w-full max-w-sm flex-col items-center gap-4 rounded-[30px] border border-white/90 bg-white/95 px-8 py-8 text-center shadow-[0_30px_80px_rgba(15,23,42,.12)];
+  }
+
+  .app-loader-spinner {
+    @apply flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-[0_14px_30px_rgba(15,23,42,.25)];
+  }
+
+  .app-loader-progress {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .loader-step {
+    @apply flex items-center gap-2 rounded-2xl px-3 py-2 transition duration-200;
+  }
+
+  .loader-step::before {
+    content: '';
+    @apply h-2.5 w-2.5 rounded-full bg-slate-300 transition duration-200;
+  }
+
+  .loader-step.is-active {
+    @apply bg-white text-slate-900 shadow-sm;
+  }
+
+  .loader-step.is-active::before {
+    @apply bg-sky-500;
+  }
+
+  .loader-step.is-done::before {
+    @apply bg-emerald-500;
+  }
+
+  .page-busy {
+    @apply relative;
+  }
+
+  .page-busy::after {
+    content: '';
+    @apply absolute inset-0 rounded-[28px] bg-white/55 backdrop-blur-[1px];
   }
 
   .modal-overlay.is-open {

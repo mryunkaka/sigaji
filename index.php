@@ -33,6 +33,37 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
     <link rel="stylesheet" href="<?= e(asset_url('assets/app.css')) ?>">
 </head>
 <body>
+<div id="app-loader" class="app-loader">
+    <div class="app-loader-card">
+        <div class="app-loader-spinner">
+            <span class="animate-spin"><?= ui_icon('arrow-path', 'h-7 w-7') ?></span>
+        </div>
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Menyiapkan Halaman</p>
+            <h2 class="mt-2 text-xl font-semibold text-slate-900">Memuat data dan asset</h2>
+            <p id="app-loader-status" class="mt-2 text-sm text-slate-500">Memulai pemuatan aplikasi...</p>
+        </div>
+        <div class="w-full space-y-3">
+            <div class="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                <div id="app-loader-bar" class="app-loader-progress h-full rounded-full bg-slate-900" style="width: 0%"></div>
+            </div>
+            <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <span>Progress</span>
+                <span id="app-loader-percent">0%</span>
+            </div>
+        </div>
+        <div class="w-full rounded-[24px] border border-slate-200 bg-slate-50/90 p-4 text-left">
+            <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Tahap Pemuatan</p>
+            <div class="space-y-2.5 text-sm text-slate-600">
+                <div id="loader-step-shell" class="loader-step">Menyiapkan shell aplikasi</div>
+                <div id="loader-step-assets" class="loader-step">Memuat asset stylesheet dan script</div>
+                <div id="loader-step-components" class="loader-step">Menyusun komponen antarmuka</div>
+                <div id="loader-step-data" class="loader-step">Mengambil data halaman awal</div>
+                <div id="loader-step-ready" class="loader-step">Finalisasi tampilan siap pakai</div>
+            </div>
+        </div>
+    </div>
+</div>
 <?php if (!$user): ?>
     <main class="login-shell">
         <section class="login-single-wrap">

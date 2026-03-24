@@ -48,10 +48,29 @@
   const pageTitle = document.getElementById('page-title');
   const toast = document.getElementById('toast');
   const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
+  const appLoader = document.getElementById('app-loader');
+  const appLoaderBar = document.getElementById('app-loader-bar');
+  const appLoaderPercent = document.getElementById('app-loader-percent');
+  const appLoaderStatus = document.getElementById('app-loader-status');
+  const loaderSteps = {
+    shell: document.getElementById('loader-step-shell'),
+    assets: document.getElementById('loader-step-assets'),
+    components: document.getElementById('loader-step-components'),
+    data: document.getElementById('loader-step-data'),
+    ready: document.getElementById('loader-step-ready'),
+  };
+  let appReady = false;
+  let loaderProgress = 0;
 
   if (!pageContent || !pageTitle || !toast) {
+    window.addEventListener('load', () => {
+      appLoader?.classList.add('hidden');
+      document.body.classList.remove('app-loading');
+    });
     return;
   }
+
+  document.body.classList.add('app-loading');
 
   const getDefaultSidebarState = () => {
     const stored = localStorage.getItem(SIDEBAR_KEY);
@@ -71,6 +90,46 @@
   };
 
   setSidebarState(getDefaultSidebarState());
+
+  const showAppLoader = () => {
+    appLoader?.classList.remove('hidden');
+    document.body.classList.add('app-loading');
+  };
+
+  const hideAppLoader = () => {
+    appLoader?.classList.add('hidden');
+    document.body.classList.remove('app-loading');
+  };
+
+  const setLoaderProgress = (value, status = null) => {
+    loaderProgress = Math.max(loaderProgress, Math.min(100, value));
+    if (appLoaderBar) {
+      appLoaderBar.style.width = `${loaderProgress}%`;
+    }
+    if (appLoaderPercent) {
+      appLoaderPercent.textContent = `${Math.round(loaderProgress)}%`;
+    }
+    if (status && appLoaderStatus) {
+      appLoaderStatus.textContent = status;
+    }
+  };
+
+  const setLoaderStep = (name, state = 'active') => {
+    Object.entries(loaderSteps).forEach(([key, element]) => {
+      if (!element) {
+        return;
+      }
+      if (key === name) {
+        element.classList.toggle('is-active', state === 'active');
+        element.classList.toggle('is-done', state === 'done');
+      } else if (state === 'active' && !element.classList.contains('is-done')) {
+        element.classList.remove('is-active');
+      }
+    });
+  };
+
+  setLoaderStep('shell', 'active');
+  setLoaderProgress(10, 'Menyiapkan shell aplikasi...');
 
   const showToast = (message, type = 'success') => {
     toast.className = 'mb-4 rounded-2xl border px-4 py-3 text-sm font-medium ' + (type === 'error'
@@ -321,10 +380,32 @@
     window.location.hash = section;
     pageTitle.textContent = section.charAt(0).toUpperCase() + section.slice(1);
     setActiveNav(section);
+    pageContent.classList.add('page-busy');
     pageContent.innerHTML = '<div class="soft-card p-8 text-sm text-slate-500">Memuat data...</div>';
-    const response = await fetch(`ajax/${section}.php${query ? '?' + query : ''}`, { credentials: 'same-origin' });
-    pageContent.innerHTML = await response.text();
-    initDataTables();
+    setLoaderStep('assets', 'done');
+    setLoaderStep('components', 'active');
+    setLoaderProgress(45, 'Menyusun komponen antarmuka...');
+    try {
+      window.setTimeout(() => {
+        setLoaderStep('components', 'done');
+        setLoaderStep('data', 'active');
+        setLoaderProgress(70, 'Mengambil data halaman awal...');
+      }, 80);
+      const response = await fetch(`ajax/${section}.php${query ? '?' + query : ''}`, { credentials: 'same-origin' });
+      pageContent.innerHTML = await response.text();
+      initDataTables();
+      appReady = true;
+      setLoaderStep('data', 'done');
+      setLoaderStep('ready', 'active');
+      setLoaderProgress(92, 'Finalisasi tampilan siap pakai...');
+    } finally {
+      pageContent.classList.remove('page-busy');
+      if (document.readyState === 'complete') {
+        setLoaderStep('ready', 'done');
+        setLoaderProgress(100, 'Semua asset, komponen, dan data berhasil dimuat.');
+        window.setTimeout(hideAppLoader, 180);
+      }
+    }
   };
 
   const submitAjaxForm = async (form) => {
@@ -383,12 +464,18 @@
 
     const sidebarToggle = event.target.closest('[data-sidebar-toggle]');
     if (sidebarToggle) {
+      if (!appReady) {
+        return;
+      }
       toggleSidebarState();
       return;
     }
 
     const sidebarClose = event.target.closest('[data-sidebar-close]');
     if (sidebarClose) {
+      if (!appReady) {
+        return;
+      }
       setSidebarState(false);
       return;
     }
@@ -534,6 +621,19 @@
     if (localStorage.getItem(SIDEBAR_KEY) === null) {
       setSidebarState(true);
     }
+  });
+
+  window.addEventListener('load', () => {
+    setLoaderStep('shell', 'done');
+    setLoaderStep('assets', 'active');
+    setLoaderProgress(28, 'Asset stylesheet dan script siap digunakan...');
+    if (appReady) {
+      setLoaderStep('ready', 'done');
+      setLoaderProgress(100, 'Semua asset, komponen, dan data berhasil dimuat.');
+      window.setTimeout(hideAppLoader, 180);
+      return;
+    }
+    showAppLoader();
   });
 
   loadSection(currentSection, sectionParams[currentSection] || null);
