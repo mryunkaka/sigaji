@@ -1,0 +1,16 @@
+Options -Indexes
+
+RewriteEngine On
+
+# Serve static assets from /public while document root points to project root.
+RewriteRule ^assets/(.*)$ public/assets/$1 [L]
+RewriteRule ^uploads/(.*)$ public/uploads/$1 [L]
+
+# Deny access to internal folders and sensitive files.
+RewriteRule ^(bootstrap|components|config|docs|node_modules|resources|services|storage|views)/ - [F,L,NC]
+RewriteRule ^\.git/ - [F,L,NC]
+RewriteRule ^(\.env|\.git|package\.json|package-lock\.json|tailwind\.config\.js|README\.md|hark8423_gaji\.sql)$ - [F,L,NC]
+
+<FilesMatch "^(?:\.env|package\.json|package-lock\.json|tailwind\.config\.js|README\.md|hark8423_gaji\.sql)$">
+    Require all denied
+</FilesMatch>

@@ -1,0 +1,81 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+|--------------------------------------------------------------------------
+| Cron Deploy PHP Native - cPanel Shared Hosting
+|--------------------------------------------------------------------------
+| Simpan file ini sebagai:
+| /home/hark8423/public_html/deploy-sigaji-cron.php
+|
+| Jalankan dengan cron:
+| * * * * * /usr/bin/php /home/hark8423/public_html/deploy-sigaji-cron.php
+|
+| Flow:
+| - Anda git push dari Visual Studio / local
+| - Cron berjalan setiap 1 menit
+| - Script cek branch main
+| - Jika ada commit baru, script otomatis pull
+|
+| Tidak perlu webhook GitHub.
+*/
+
+$deployPath = '/home/hark8423/public_html/penggajian';
+$branch = 'main';
+$remote = 'origin';
+$logFile = '/home/hark8423/git-deploy-sigaji.log';
+
+if (!is_dir($deployPath) || !is_dir($deployPath . '/.git')) {
+    file_put_contents($logFile, date('Y-m-d H:i:s') . " - Deploy gagal: repo tidak ditemukan di {$deployPath}\n", FILE_APPEND);
+    exit(1);
+}
+
+chdir($deployPath);
+
+$run = static function (string $command): string {
+    return trim((string) shell_exec($command . ' 2>&1'));
+};
+
+$oldCommit = $run('git rev-parse HEAD');
+
+// Ambil info terbaru dari remote dulu.
+$fetchOutput = $run(sprintf('git fetch %s %s', escapeshellarg($remote), escapeshellarg($branch)));
+$remoteCommit = $run(sprintf('git rev-parse %s/%s', escapeshellarg($remote), escapeshellarg($branch)));
+
+if ($oldCommit === $remoteCommit) {
+    file_put_contents($logFile, date('Y-m-d H:i:s') . " - Tidak ada perubahan. Commit tetap {$oldCommit}\n", FILE_APPEND);
+    exit(0);
+}
+
+// Sinkronkan repo lokal ke commit terbaru.
+$cleanOutput = $run('git reset --hard HEAD && git clean -fd -e .env -e public/uploads -e storage');
+$pullOutput = $run(sprintf('git pull %s %s', escapeshellarg($remote), escapeshellarg($branch)));
+$newCommit = $run('git rev-parse HEAD');
+
+// Pastikan folder runtime tetap ada.
+$runtimeDirs = [
+    $deployPath . '/public/uploads/users',
+    $deployPath . '/public/uploads/units',
+    $deployPath . '/storage',
+];
+
+foreach ($runtimeDirs as $dir) {
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+}
+
+$date = date('Y-m-d H:i:s');
+$message = $date
+    . " - Deploy berhasil via cron\n"
+    . "Path      : {$deployPath}\n"
+    . "Commit    : {$oldCommit} -> {$newCommit}\n"
+    . "Fetch     : {$fetchOutput}\n"
+    . "Clean     : {$cleanOutput}\n"
+    . "Pull      : {$pullOutput}\n"
+    . str_repeat('-', 60) . "\n";
+
+file_put_contents($logFile, $message, FILE_APPEND);
+
+exit(0);

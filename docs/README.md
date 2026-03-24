@@ -62,6 +62,29 @@ Sistem baru:
 4. Jalankan lewat web server PHP biasa, misalnya document root ke folder ini.
 5. Login memakai user yang ada pada tabel `users`.
 
+## Deploy Shared Hosting cPanel
+
+- Jika subdomain diarahkan langsung ke `public_html/penggajian`, simpan seluruh isi repo di folder itu.
+- Jangan pakai flow Laravel seperti `artisan optimize:clear` atau copy folder `public`.
+- Pakai sample file cron deploy di `docs/deploy-sigaji-cron.php.example`.
+- Simpan sebagai `/home/hark8423/public_html/deploy-sigaji-cron.php`.
+- Tambahkan cron:
+  - `* * * * * /usr/bin/php /home/hark8423/public_html/deploy-sigaji-cron.php`
+- Flow deploy:
+  - `git push` dari local ke GitHub
+  - cron cek setiap 1 menit
+  - jika ada commit baru di `main`, server otomatis `git pull`
+- Tidak perlu webhook GitHub.
+- Tidak perlu buka file deploy manual dari browser.
+- Root project sudah disiapkan `.htaccess` agar:
+  - `assets/*` diarahkan ke `public/assets/*`
+  - `uploads/*` diarahkan ke `public/uploads/*`
+  - folder internal seperti `bootstrap`, `config`, `services`, `storage`, dan `.env` tidak bisa diakses dari web
+- Penting:
+  - folder `/home/hark8423/public_html/penggajian` harus benar-benar repository Git
+  - kalau shared hosting tidak punya SSH, buat repository itu lewat fitur cPanel `Git Version Control`
+  - kalau folder dibuat biasa lewat File Manager tanpa `.git`, script deploy tidak akan bisa `git pull`
+
 ## TODO LIST
 
 - Mirror absensi
