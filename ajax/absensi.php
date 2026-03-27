@@ -47,6 +47,10 @@ if ($startDate > $endDate) {
     [$startDate, $endDate] = [$endDate, $startDate];
 }
 
+$pageSize = 25;
+$currentPage = max(1, (int) request_value('page', 1));
+$search = trim((string) request_value('search', ''));
+
 $statusCounts = fetch_all(
     'SELECT a.status, COUNT(*) AS total
      FROM absensi a
@@ -63,14 +67,33 @@ foreach ($statusCounts as $count) {
     }
 }
 
+$searchSql = '';
+$searchParams = [];
+if ($search !== '') {
+    $searchSql = ' AND u.name LIKE :search ';
+    $searchParams['search'] = '%' . $search . '%';
+}
+
+$totalRecords = (int) (fetch_one(
+    'SELECT COUNT(*) AS total
+     FROM absensi a
+     JOIN users u ON u.id = a.user_id
+     WHERE u.unit_id = :unit_id AND a.tanggal BETWEEN :start AND :end' . $searchSql,
+    ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate] + $searchParams
+)['total'] ?? 0);
+$totalPages = max(1, (int) ceil($totalRecords / $pageSize));
+$currentPage = min($currentPage, $totalPages);
+$offset = ($currentPage - 1) * $pageSize;
+
 $records = fetch_all(
     'SELECT a.*, u.name, u.jabatan
      FROM absensi a
      JOIN users u ON u.id = a.user_id
-     WHERE u.unit_id = :unit_id AND a.tanggal BETWEEN :start AND :end
+     WHERE u.unit_id = :unit_id AND a.tanggal BETWEEN :start AND :end' . $searchSql . '
      ORDER BY a.tanggal ASC, a.id ASC
+     LIMIT ' . $pageSize . ' OFFSET ' . $offset . '
     ',
-    ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate]
+    ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate] + $searchParams
 );
 
 $statusOptions = [
@@ -215,7 +238,7 @@ $modals .= ui_modal($createModalId, 'Tambah Absensi Manual', $renderAbsensiForm(
 ], $createModalId, true));
 
 $uploadInputId = 'absensi-upload-file';
-$uploadForm = '<form action="ajax/upload_absen.php" method="post" enctype="multipart/form-data" data-ajax-form class="grid gap-4 md:grid-cols-[1fr_auto]">'
+$uploadForm = '<form action="ajax/upload_absen.php" method="post" enctype="multipart/form-data" data-ajax-form data-upload-progress="import-absensi" class="grid gap-4 md:grid-cols-[1fr_auto]">'
     . csrf_input()
     . '<div class="block"><label for="' . e($uploadInputId) . '" class="mb-2 block text-sm font-medium text-slate-700">File Absensi</label><input id="' . e($uploadInputId) . '" type="file" name="file" accept=".csv,.xlsx" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"></div>'
     . '<div class="flex items-end">' . ui_button('Upload Absensi', ['type' => 'submit', 'variant' => 'success', 'icon' => 'arrow-up-tray']) . '</div>'
@@ -265,7 +288,26 @@ echo ui_panel('Riwayat Absensi',
     . ui_table(
     [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Nama', 'Jabatan', 'Tanggal', 'Status', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Telat', 'Potongan', 'Aksi'],
     $tableRows !== '' ? $tableRows : '<tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">Belum ada data absensi.</td></tr>',
-    ['numeric_columns' => [8, 9], 'storage_key' => 'absensi-history', 'search_column' => 1, 'table_id' => $tableId]
+    [
+        'numeric_columns' => [8, 9],
+        'storage_key' => 'absensi-history',
+        'search_column' => 1,
+        'table_id' => $tableId,
+        'server_pagination' => [
+            'section' => 'absensi',
+            'current_page' => $currentPage,
+            'total_pages' => $totalPages,
+            'total_items' => $totalRecords,
+            'page_param' => 'page',
+            'params' => [
+                'filter' => $filterPreset,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'search' => $search,
+            ],
+            'search' => $search,
+        ],
+    ]
 ) . $bulkDeleteForm, ['subtitle' => 'Semua data absensi unit aktif pada periode ' . $rangeLabel]);
 echo '</div>';
 echo $modals;

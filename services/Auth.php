@@ -60,6 +60,14 @@ final class Auth
     public static function require(): array
     {
         if (!self::check()) {
+            if (expects_json()) {
+                json_response([
+                    'success' => false,
+                    'message' => 'Sesi login berakhir. Silakan masuk ulang.',
+                    'unauthenticated' => true,
+                    'redirect' => 'index.php',
+                ], 401);
+            }
             redirect_to('index.php');
         }
 

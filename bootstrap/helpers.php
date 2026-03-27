@@ -158,11 +158,39 @@ function csrf_input(): string
 
 function verify_csrf(): void
 {
-    $token = $_POST['_csrf'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-    if (!$token || !hash_equals($_SESSION['_csrf'] ?? '', $token)) {
-        http_response_code(419);
-        exit('CSRF token mismatch.');
+    $sessionToken = (string) ($_SESSION['_csrf'] ?? '');
+    $tokens = [];
+
+    foreach ([$_POST['_csrf'] ?? null, $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null] as $candidate) {
+        if (is_string($candidate) && $candidate !== '') {
+            $tokens[] = $candidate;
+        }
     }
+
+    $isValid = $sessionToken !== '';
+    if ($isValid) {
+        $isValid = false;
+        foreach ($tokens as $token) {
+            if (hash_equals($sessionToken, $token)) {
+                $isValid = true;
+                break;
+            }
+        }
+    }
+
+    if ($isValid) {
+        return;
+    }
+
+    if (expects_json()) {
+        json_response([
+            'success' => false,
+            'message' => 'Token keamanan tidak valid. Muat ulang halaman lalu coba lagi.',
+        ], 419);
+    }
+
+    http_response_code(419);
+    exit('CSRF token mismatch.');
 }
 
 function redirect_to(string $path): never
@@ -179,6 +207,14 @@ function is_post(): bool
 function request_value(string $key, $default = null)
 {
     return $_POST[$key] ?? $_GET[$key] ?? $default;
+}
+
+function expects_json(): bool
+{
+    $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
+    $requestedWith = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+
+    return str_contains($accept, 'application/json') || $requestedWith === 'xmlhttprequest';
 }
 
 function db(): PDO

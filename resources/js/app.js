@@ -156,6 +156,64 @@
     window.setTimeout(() => toast.classList.add('hidden'), 4000);
   };
 
+  const ensureProgressOverlay = () => {
+    let overlay = document.getElementById('upload-progress-overlay');
+    if (overlay) {
+      return overlay;
+    }
+
+    overlay = document.createElement('div');
+    overlay.id = 'upload-progress-overlay';
+    overlay.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 p-4';
+    overlay.innerHTML = `
+      <div class="w-full max-w-xl rounded-[28px] bg-white p-6 shadow-2xl">
+        <div class="mb-5 flex items-center gap-3">
+          <span class="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-sky-500"></span>
+          <div>
+            <p class="text-lg font-semibold text-slate-900" data-upload-progress-title>Import Absensi</p>
+            <p class="text-sm text-slate-500" data-upload-progress-status>Menyiapkan upload file...</p>
+          </div>
+        </div>
+        <div class="mb-3 h-3 overflow-hidden rounded-full bg-slate-100">
+          <div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-500 transition-[width] duration-200" data-upload-progress-bar style="width:0%"></div>
+        </div>
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-slate-500" data-upload-progress-note>Mohon tunggu, proses import sedang berjalan.</span>
+          <span class="font-semibold text-slate-700" data-upload-progress-percent>0%</span>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    return overlay;
+  };
+
+  const updateProgressOverlay = ({ title, status, note, percent }) => {
+    const overlay = ensureProgressOverlay();
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
+
+    overlay.querySelector('[data-upload-progress-title]')?.replaceChildren(document.createTextNode(title));
+    overlay.querySelector('[data-upload-progress-status]')?.replaceChildren(document.createTextNode(status));
+    overlay.querySelector('[data-upload-progress-note]')?.replaceChildren(document.createTextNode(note));
+    overlay.querySelector('[data-upload-progress-percent]')?.replaceChildren(document.createTextNode(`${Math.round(percent)}%`));
+    const bar = overlay.querySelector('[data-upload-progress-bar]');
+    if (bar) {
+      bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    }
+  };
+
+  const hideProgressOverlay = () => {
+    const overlay = document.getElementById('upload-progress-overlay');
+    if (!overlay) {
+      return;
+    }
+    overlay.classList.add('hidden');
+    overlay.classList.remove('flex');
+    if (!anyModalOpen()) {
+      document.body.classList.remove('overflow-hidden');
+    }
+  };
+
   const setActiveNav = (section) => {
     document.querySelectorAll('.nav-link').forEach((item) => {
       item.classList.toggle('active', item.dataset.section === section);
@@ -190,181 +248,68 @@
 
   const formatNumber = (value) => new Intl.NumberFormat('id-ID').format(value);
 
-  const initDataTables = () => {
-    document.querySelectorAll('.data-table').forEach((wrapper) => {
-      if (wrapper.dataset.bound === 'true') {
-        return;
-      }
+  const setTableLoaderState = (wrapper, loading) => {
+    const loader = wrapper.querySelector('[data-table-loader]');
+    if (!loader) {
+      return;
+    }
+    loader.classList.toggle('hidden', !loading);
+    loader.setAttribute('aria-hidden', loading ? 'false' : 'true');
+  };
+
+  const initSingleDataTable = (wrapper) => {
+    const table = wrapper.querySelector('table');
+    const tbody = table?.querySelector('tbody');
+    const serverSection = wrapper.dataset.serverSection || '';
+    const serverParamsRaw = wrapper.dataset.serverParams || '{}';
+    if (!table || !tbody) {
       wrapper.dataset.bound = 'true';
+      setTableLoaderState(wrapper, false);
+      return;
+    }
 
-      const table = wrapper.querySelector('table');
-      const tbody = table?.querySelector('tbody');
-      if (!table || !tbody) {
+    const allRows = Array.from(tbody.querySelectorAll('tr')).filter((row) => row.children.length > 1);
+    const searchInput = wrapper.querySelector('[data-table-search]');
+    const limitSelect = wrapper.querySelector('[data-table-limit]');
+    const prevButton = wrapper.querySelector('[data-table-prev]');
+    const nextButton = wrapper.querySelector('[data-table-next]');
+    const meta = wrapper.querySelector('[data-table-meta]');
+    const pageLabel = wrapper.querySelector('[data-table-page]');
+    const footerCells = Array.from(wrapper.querySelectorAll('[data-footer-cell]'));
+    const selectAll = wrapper.querySelector('[data-table-select-all]');
+    const searchColumn = Number(wrapper.dataset.searchColumn || 0);
+    const numericColumns = JSON.parse(wrapper.dataset.numericColumns || '[]');
+    const stateKey = wrapper.dataset.storageKey || `${currentSection}-table`;
+    const savedState = tableStates[stateKey] || {};
+    let currentPage = Number(savedState.currentPage || 1);
+    let sortIndex = savedState.sortIndex ?? null;
+    let sortDirection = savedState.sortDirection || 'asc';
+    let serverParams = {};
+
+    try {
+      serverParams = JSON.parse(serverParamsRaw) || {};
+    } catch (error) {
+      serverParams = {};
+    }
+
+    const syncSelectionState = () => {
+      if (!selectAll) {
         return;
       }
+      const visibleCheckboxes = Array.from(tbody.querySelectorAll('[data-table-select]'));
+      const checkedCount = visibleCheckboxes.filter((checkbox) => checkbox.checked).length;
+      selectAll.checked = visibleCheckboxes.length > 0 && checkedCount === visibleCheckboxes.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCheckboxes.length;
+    };
 
-      const allRows = Array.from(tbody.querySelectorAll('tr')).filter((row) => row.children.length > 1);
-      const searchInput = wrapper.querySelector('[data-table-search]');
-      const limitSelect = wrapper.querySelector('[data-table-limit]');
-      const prevButton = wrapper.querySelector('[data-table-prev]');
-      const nextButton = wrapper.querySelector('[data-table-next]');
-      const meta = wrapper.querySelector('[data-table-meta]');
-      const pageLabel = wrapper.querySelector('[data-table-page]');
-      const footerCells = Array.from(wrapper.querySelectorAll('[data-footer-cell]'));
-      const selectAll = wrapper.querySelector('[data-table-select-all]');
-      const searchColumn = Number(wrapper.dataset.searchColumn || 0);
-      const numericColumns = JSON.parse(wrapper.dataset.numericColumns || '[]');
-      const stateKey = wrapper.dataset.storageKey || `${currentSection}-table`;
-      const savedState = tableStates[stateKey] || {};
-      let currentPage = Number(savedState.currentPage || 1);
-      let sortIndex = savedState.sortIndex ?? null;
-      let sortDirection = savedState.sortDirection || 'asc';
-
-      if (searchInput && typeof savedState.search === 'string') {
-        searchInput.value = savedState.search;
-      }
-      if (limitSelect && savedState.limit) {
-        limitSelect.value = String(savedState.limit);
-      }
-
-      const saveState = () => {
-        tableStates[stateKey] = {
-          currentPage,
-          sortIndex,
-          sortDirection,
-          search: searchInput?.value || '',
-          limit: limitSelect?.value || '10',
-        };
-        persistTableStates();
-      };
-
-      const syncSelectionState = () => {
-        if (!selectAll) {
-          return;
-        }
-        const visibleCheckboxes = Array.from(tbody.querySelectorAll('[data-table-select]'));
-        const checkedCount = visibleCheckboxes.filter((checkbox) => checkbox.checked).length;
-        selectAll.checked = visibleCheckboxes.length > 0 && checkedCount === visibleCheckboxes.length;
-        selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCheckboxes.length;
-      };
-
-      const render = () => {
-        const query = (searchInput?.value || '').toLowerCase().trim();
-        let filteredRows = allRows.filter((row) => {
-          if (!query) {
-            return true;
-          }
-          const cell = row.children[searchColumn];
-          return (cell?.textContent || '').toLowerCase().includes(query);
-        });
-
-        if (sortIndex !== null) {
-          filteredRows.sort((a, b) => {
-            const aCell = a.children[sortIndex];
-            const bCell = b.children[sortIndex];
-            const aText = (aCell?.dataset.sortValue || aCell?.textContent || '').trim();
-            const bText = (bCell?.dataset.sortValue || bCell?.textContent || '').trim();
-            const aNum = parseNumericValue(aText);
-            const bNum = parseNumericValue(bText);
-
-            let compare = 0;
-            if (aNum !== null && bNum !== null) {
-              compare = aNum - bNum;
-            } else {
-              compare = aText.localeCompare(bText, 'id', { numeric: true, sensitivity: 'base' });
-            }
-
-            return sortDirection === 'asc' ? compare : compare * -1;
-          });
-        }
-
-        const limitValue = limitSelect?.value || '10';
-        const pageSize = limitValue === 'all' ? filteredRows.length || 1 : Number(limitValue);
-        const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-        currentPage = Math.min(currentPage, totalPages);
-
-        const start = limitValue === 'all' ? 0 : (currentPage - 1) * pageSize;
-        const visibleRows = limitValue === 'all' ? filteredRows : filteredRows.slice(start, start + pageSize);
-
-        tbody.innerHTML = '';
-        if (visibleRows.length === 0) {
-          const colCount = table.querySelectorAll('thead th').length;
-          tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-4 py-8 text-center text-slate-500">Data tidak ditemukan.</td></tr>`;
-        } else {
-          visibleRows.forEach((row) => tbody.appendChild(row));
-        }
-
-        if (meta) {
-          meta.textContent = `Menampilkan ${visibleRows.length} dari ${filteredRows.length} data`;
-        }
-        if (pageLabel) {
-          pageLabel.textContent = `Halaman ${currentPage} / ${totalPages}`;
-        }
-        if (prevButton) {
-          prevButton.disabled = currentPage <= 1 || limitValue === 'all';
-        }
-        if (nextButton) {
-          nextButton.disabled = currentPage >= totalPages || limitValue === 'all';
-        }
-
-        footerCells.forEach((cell, index) => {
-          if (index === 0) {
-            cell.textContent = `Total tampil: ${visibleRows.length} data`;
-            return;
-          }
-          if (!numericColumns.includes(index)) {
-            cell.innerHTML = '&nbsp;';
-            return;
-          }
-          const total = visibleRows.reduce((sum, row) => {
-            const value = parseNumericValue((row.children[index]?.textContent || '').trim());
-            return sum + (value ?? 0);
-          }, 0);
-          cell.textContent = formatNumber(total);
-        });
-
-        syncSelectionState();
-        saveState();
-      };
-
-      wrapper.querySelectorAll('[data-table-sort]').forEach((button) => {
-        button.addEventListener('click', () => {
-          const nextIndex = Number(button.dataset.tableSort);
-          if (sortIndex === nextIndex) {
-            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-          } else {
-            sortIndex = nextIndex;
-            sortDirection = 'asc';
-          }
-          currentPage = 1;
-          render();
-        });
-      });
-
+    if (serverSection) {
+      let searchTimer = null;
       searchInput?.addEventListener('input', () => {
-        currentPage = 1;
-        render();
-      });
-
-      limitSelect?.addEventListener('change', () => {
-        currentPage = 1;
-        render();
-      });
-
-      prevButton?.addEventListener('click', () => {
-        if (currentPage > 1) {
-          currentPage -= 1;
-          render();
-        }
-      });
-
-      nextButton?.addEventListener('click', () => {
-        const limitValue = limitSelect?.value || '10';
-        if (limitValue === 'all') {
-          return;
-        }
-        currentPage += 1;
-        render();
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(() => {
+          const nextParams = { ...serverParams, search: searchInput.value || '', page: 1, master_page: 1, payroll_page: 1 };
+          loadSection(serverSection, nextParams);
+        }, 300);
       });
 
       selectAll?.addEventListener('change', () => {
@@ -380,9 +325,366 @@
         }
       });
 
+      syncSelectionState();
+      setTableLoaderState(wrapper, false);
+      wrapper.dataset.bound = 'true';
+      return;
+    }
+
+    if (searchInput && typeof savedState.search === 'string') {
+      searchInput.value = savedState.search;
+    }
+    if (limitSelect && savedState.limit) {
+      limitSelect.value = String(savedState.limit);
+    }
+
+    const saveState = () => {
+      tableStates[stateKey] = {
+        currentPage,
+        sortIndex,
+        sortDirection,
+        search: searchInput?.value || '',
+        limit: limitSelect?.value || '10',
+      };
+      persistTableStates();
+    };
+
+    const render = () => {
+      const query = (searchInput?.value || '').toLowerCase().trim();
+      let filteredRows = allRows.filter((row) => {
+        if (!query) {
+          return true;
+        }
+        const cell = row.children[searchColumn];
+        return (cell?.textContent || '').toLowerCase().includes(query);
+      });
+
+      if (sortIndex !== null) {
+        filteredRows.sort((a, b) => {
+          const aCell = a.children[sortIndex];
+          const bCell = b.children[sortIndex];
+          const aText = (aCell?.dataset.sortValue || aCell?.textContent || '').trim();
+          const bText = (bCell?.dataset.sortValue || bCell?.textContent || '').trim();
+          const aNum = parseNumericValue(aText);
+          const bNum = parseNumericValue(bText);
+
+          let compare = 0;
+          if (aNum !== null && bNum !== null) {
+            compare = aNum - bNum;
+          } else {
+            compare = aText.localeCompare(bText, 'id', { numeric: true, sensitivity: 'base' });
+          }
+
+          return sortDirection === 'asc' ? compare : compare * -1;
+        });
+      }
+
+      const limitValue = limitSelect?.value || '10';
+      const pageSize = limitValue === 'all' ? filteredRows.length || 1 : Number(limitValue);
+      const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+
+      const start = limitValue === 'all' ? 0 : (currentPage - 1) * pageSize;
+      const visibleRows = limitValue === 'all' ? filteredRows : filteredRows.slice(start, start + pageSize);
+
+      tbody.innerHTML = '';
+      if (visibleRows.length === 0) {
+        const colCount = table.querySelectorAll('thead th').length;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-4 py-8 text-center text-slate-500">Data tidak ditemukan.</td></tr>`;
+      } else {
+        visibleRows.forEach((row) => tbody.appendChild(row));
+      }
+
+      if (meta) {
+        meta.textContent = `Menampilkan ${visibleRows.length} dari ${filteredRows.length} data`;
+      }
+      if (pageLabel) {
+        pageLabel.textContent = `Halaman ${currentPage} / ${totalPages}`;
+      }
+      if (prevButton) {
+        prevButton.disabled = currentPage <= 1 || limitValue === 'all';
+      }
+      if (nextButton) {
+        nextButton.disabled = currentPage >= totalPages || limitValue === 'all';
+      }
+
+      footerCells.forEach((cell, index) => {
+        if (index === 0) {
+          cell.textContent = `Total tampil: ${visibleRows.length} data`;
+          return;
+        }
+        if (!numericColumns.includes(index)) {
+          cell.innerHTML = '&nbsp;';
+          return;
+        }
+        const total = visibleRows.reduce((sum, row) => {
+          const value = parseNumericValue((row.children[index]?.textContent || '').trim());
+          return sum + (value ?? 0);
+        }, 0);
+        cell.textContent = formatNumber(total);
+      });
+
+      syncSelectionState();
+      saveState();
+      setTableLoaderState(wrapper, false);
+    };
+
+    wrapper.querySelectorAll('[data-table-sort]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const nextIndex = Number(button.dataset.tableSort);
+        if (sortIndex === nextIndex) {
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortIndex = nextIndex;
+          sortDirection = 'asc';
+        }
+        currentPage = 1;
+        render();
+      });
+    });
+
+    searchInput?.addEventListener('input', () => {
+      currentPage = 1;
       render();
     });
+
+    limitSelect?.addEventListener('change', () => {
+      currentPage = 1;
+      render();
+    });
+
+    prevButton?.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        render();
+      }
+    });
+
+    nextButton?.addEventListener('click', () => {
+      const limitValue = limitSelect?.value || '10';
+      if (limitValue === 'all') {
+        return;
+      }
+      currentPage += 1;
+      render();
+    });
+
+    selectAll?.addEventListener('change', () => {
+      tbody.querySelectorAll('[data-table-select]').forEach((checkbox) => {
+        checkbox.checked = selectAll.checked;
+      });
+      syncSelectionState();
+    });
+
+    tbody.addEventListener('change', (event) => {
+      if (event.target.matches('[data-table-select]')) {
+        syncSelectionState();
+      }
+    });
+
+    render();
+    wrapper.dataset.bound = 'true';
   };
+
+  const initDataTables = () => {
+    const queue = Array.from(document.querySelectorAll('.data-table')).filter((wrapper) => wrapper.dataset.bound !== 'true' && wrapper.dataset.bound !== 'pending');
+    const processNext = () => {
+      const wrapper = queue.shift();
+      if (!wrapper) {
+        return;
+      }
+      wrapper.dataset.bound = 'pending';
+      setTableLoaderState(wrapper, true);
+      window.requestAnimationFrame(() => {
+        initSingleDataTable(wrapper);
+        window.setTimeout(processNext, 0);
+      });
+    };
+
+    processNext();
+  };
+
+  const setRemoteModalContent = (modal, title, body) => {
+    modal.querySelector('[data-modal-title]')?.replaceChildren(document.createTextNode(title));
+    const bodyTarget = modal.querySelector('[data-modal-body]');
+    if (bodyTarget) {
+      bodyTarget.innerHTML = body;
+    }
+  };
+
+  const setRemoteModalLoading = (modal, accent = 'sky', message = 'Memuat data...') => {
+    const title = message;
+    const spinnerClass = accent === 'emerald' ? 'border-t-emerald-500' : 'border-t-sky-500';
+    const body = `<div class="flex items-center gap-3 text-sm text-slate-500"><span class="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-200 ${spinnerClass}"></span><span>${message}</span></div>`;
+    setRemoteModalContent(modal, title, body);
+  };
+
+  const parseJsonResponse = (raw) => {
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
+      if (start !== -1 && end !== -1 && end > start) {
+        return JSON.parse(raw.slice(start, end + 1));
+      }
+      throw error;
+    }
+  };
+
+  const handleUnauthenticated = (result) => {
+    if (!result?.unauthenticated) {
+      return false;
+    }
+    window.location.href = result.redirect || 'index.php';
+    return true;
+  };
+
+  const openRemoteModal = async (trigger) => {
+    const modalId = trigger.dataset.modalTarget || '';
+    const url = trigger.dataset.modalUrl || '';
+    const modal = document.getElementById(modalId);
+    if (!modal || !url) {
+      showToast('Modal detail tidak ditemukan.', 'error');
+      return;
+    }
+
+    const accent = modalId.includes('edit') ? 'emerald' : 'sky';
+    const loadingMessage = modalId.includes('edit') ? 'Memuat form absensi...' : 'Memuat detail absensi...';
+    setRemoteModalLoading(modal, accent, loadingMessage);
+    openModalById(modalId);
+
+    try {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+      const raw = await response.text();
+      let result;
+      try {
+        result = parseJsonResponse(raw);
+      } catch (parseError) {
+        throw new Error(response.ok ? 'Respons modal tidak valid.' : raw.slice(0, 200));
+      }
+      if (handleUnauthenticated(result)) {
+        return;
+      }
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Gagal memuat modal.');
+      }
+      setRemoteModalContent(modal, result.title || 'Detail', result.body || '');
+    } catch (error) {
+      setRemoteModalContent(modal, 'Gagal Memuat', `<div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">${error.message}</div>`);
+    }
+  };
+
+  const submitUploadFormWithProgress = (form) => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData(form);
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    let visualProgress = 0;
+    let processingTimer = null;
+
+    const setVisualProgress = (nextPercent, status, note) => {
+      visualProgress = Math.max(visualProgress, Math.min(100, nextPercent));
+      updateProgressOverlay({
+        title: 'Import Absensi',
+        status,
+        note,
+        percent: visualProgress,
+      });
+    };
+
+    const startProcessingAnimation = () => {
+      if (processingTimer) {
+        return;
+      }
+      processingTimer = window.setInterval(() => {
+        if (visualProgress >= 95) {
+          window.clearInterval(processingTimer);
+          processingTimer = null;
+          return;
+        }
+        setVisualProgress(
+          Math.min(95, visualProgress + (visualProgress < 85 ? 3 : 1)),
+          'Memproses data absensi...',
+          'File sudah terkirim. Server sedang membaca dan menyimpan data.'
+        );
+      }, 180);
+    };
+
+    setVisualProgress(5, 'Menyiapkan upload file...', 'Validasi file dan koneksi sedang disiapkan.');
+
+    xhr.open(form.method || 'POST', form.action, true);
+    xhr.withCredentials = true;
+    if (csrf) {
+      xhr.setRequestHeader('X-CSRF-Token', csrf);
+    }
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (!event.lengthComputable) {
+        setVisualProgress(25, 'Mengunggah file absensi...', 'Progress upload sedang dihitung.');
+        return;
+      }
+      const uploadPercent = 10 + ((event.loaded / event.total) * 70);
+      setVisualProgress(uploadPercent, 'Mengunggah file absensi...', 'File sedang dikirim ke server.');
+      if (event.loaded === event.total) {
+        startProcessingAnimation();
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (processingTimer) {
+        window.clearInterval(processingTimer);
+      }
+      let result;
+      try {
+        result = parseJsonResponse(xhr.responseText);
+      } catch (error) {
+        hideProgressOverlay();
+        reject(new Error('Respons server tidak valid. Periksa error PHP pada endpoint.'));
+        return;
+      }
+
+      if (xhr.status < 200 || xhr.status >= 300 || !result.success) {
+        if (handleUnauthenticated(result)) {
+          return;
+        }
+        hideProgressOverlay();
+        reject(new Error(result.message || 'Upload absensi gagal diproses.'));
+        return;
+      }
+
+      setVisualProgress(100, 'Import berhasil.', 'Data absensi berhasil diproses dan disimpan.');
+      window.setTimeout(() => {
+        hideProgressOverlay();
+        resolve(result);
+      }, 350);
+    });
+
+    xhr.addEventListener('error', () => {
+      if (processingTimer) {
+        window.clearInterval(processingTimer);
+      }
+      hideProgressOverlay();
+      reject(new Error('Koneksi terputus saat upload absensi.'));
+    });
+
+    xhr.addEventListener('abort', () => {
+      if (processingTimer) {
+        window.clearInterval(processingTimer);
+      }
+      hideProgressOverlay();
+      reject(new Error('Upload absensi dibatalkan.'));
+    });
+
+    xhr.send(formData);
+  });
 
   const loadSection = async (section, params = null) => {
     currentSection = section;
@@ -423,22 +725,38 @@
   };
 
   const submitAjaxForm = async (form) => {
-    const formData = new FormData(form);
-    const response = await fetch(form.action, {
-      method: 'POST',
-      body: formData,
-      credentials: 'same-origin',
-      headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content },
-    });
-
-    const raw = await response.text();
     let result;
 
     try {
-      result = JSON.parse(raw);
+      if (form.dataset.uploadProgress === 'import-absensi') {
+        result = await submitUploadFormWithProgress(form);
+      } else {
+        const formData = new FormData(form);
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+
+        const raw = await response.text();
+        try {
+          result = parseJsonResponse(raw);
+        } catch (error) {
+          showToast('Respons server tidak valid. Periksa error PHP pada endpoint.', 'error');
+          console.error('Non-JSON response:', raw);
+          return;
+        }
+        if (handleUnauthenticated(result)) {
+          return;
+        }
+      }
     } catch (error) {
-      showToast('Respons server tidak valid. Periksa error PHP pada endpoint.', 'error');
-      console.error('Non-JSON response:', raw);
+      showToast(error.message, 'error');
       return;
     }
 
@@ -476,6 +794,18 @@
       return;
     }
 
+    const sectionPager = event.target.closest('[data-load-section]');
+    if (sectionPager) {
+      let nextParams = {};
+      try {
+        nextParams = JSON.parse(sectionPager.dataset.sectionParams || '{}') || {};
+      } catch (error) {
+        nextParams = {};
+      }
+      loadSection(sectionPager.dataset.loadSection, nextParams);
+      return;
+    }
+
     const sidebarToggle = event.target.closest('[data-sidebar-toggle]');
     if (sidebarToggle) {
       if (!appReady) {
@@ -502,6 +832,12 @@
     const openModal = event.target.closest('[data-open-modal]');
     if (openModal) {
       openModalById(openModal.dataset.openModal);
+      return;
+    }
+
+    const openRemoteModalTrigger = event.target.closest('[data-open-remote-modal]');
+    if (openRemoteModalTrigger) {
+      openRemoteModal(openRemoteModalTrigger);
       return;
     }
 
@@ -534,13 +870,17 @@
     const ids = Array.from(table.querySelectorAll('[data-table-select]:checked'))
       .map((checkbox) => checkbox.value)
       .filter(Boolean);
+    const itemLabel = bulkDelete.dataset.bulkItemLabel || 'data';
+    const emptyMessage = bulkDelete.dataset.bulkEmptyMessage || `Pilih ${itemLabel} yang ingin dihapus.`;
+    const confirmMessageTemplate = bulkDelete.dataset.bulkConfirmMessage || `Hapus permanen {count} ${itemLabel} terpilih?`;
 
     if (ids.length === 0) {
-      showToast('Pilih data absensi yang ingin dihapus.', 'error');
+      showToast(emptyMessage, 'error');
       return;
     }
 
-    if (!window.confirm(`Hapus permanen ${ids.length} data absensi?`)) {
+    const confirmMessage = confirmMessageTemplate.replace('{count}', String(ids.length));
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 

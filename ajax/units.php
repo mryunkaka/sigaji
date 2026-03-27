@@ -3,7 +3,21 @@
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
 
-$units = fetch_all('SELECT * FROM units ORDER BY nama_unit');
+$pageSize = 25;
+$currentPage = max(1, (int) request_value('page', 1));
+$search = trim((string) request_value('search', ''));
+$searchSql = '';
+$searchParams = [];
+if ($search !== '') {
+    $searchSql = ' WHERE nama_unit LIKE :search ';
+    $searchParams['search'] = '%' . $search . '%';
+}
+$totalUnits = (int) (fetch_one('SELECT COUNT(*) AS total FROM units' . $searchSql, $searchParams)['total'] ?? 0);
+$totalPages = max(1, (int) ceil($totalUnits / $pageSize));
+$currentPage = min($currentPage, $totalPages);
+$offset = ($currentPage - 1) * $pageSize;
+
+$units = fetch_all('SELECT * FROM units' . $searchSql . ' ORDER BY nama_unit LIMIT ' . $pageSize . ' OFFSET ' . $offset, $searchParams);
 
 $renderUnitForm = static function (array $item, string $modalId, bool $isCreate = false): string {
     return '<form action="ajax/save_unit.php" method="post" enctype="multipart/form-data" data-ajax-form class="grid gap-4 md:grid-cols-2">'
@@ -71,7 +85,19 @@ echo ui_panel('Data Unit', '<div class="mb-4 flex justify-end">'
     . ui_table(
         [['label' => 'Logo', 'sortable' => false], 'Nama Unit', 'Alamat', 'Nomor HP', ['label' => 'Aksi', 'sortable' => false]],
         $rows !== '' ? $rows : '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Belum ada data unit.</td></tr>',
-        ['storage_key' => 'units-list', 'search_column' => 1]
+        [
+            'storage_key' => 'units-list',
+            'search_column' => 1,
+            'server_pagination' => [
+                'section' => 'units',
+                'current_page' => $currentPage,
+                'total_pages' => $totalPages,
+                'total_items' => $totalUnits,
+                'page_param' => 'page',
+                'params' => ['search' => $search],
+                'search' => $search,
+            ],
+        ]
     ),
     ['subtitle' => 'Mirror halaman unit lama untuk kelola nama, alamat, nomor HP, dan logo unit.']
 );

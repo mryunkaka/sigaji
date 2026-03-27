@@ -3,23 +3,61 @@
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 
+$pageSize = 25;
+$masterPage = max(1, (int) request_value('master_page', 1));
+$payrollPage = max(1, (int) request_value('payroll_page', 1));
+$search = trim((string) request_value('search', ''));
+$masterSearchSql = '';
+$masterSearchParams = [];
+$payrollSearchSql = '';
+$payrollSearchParams = [];
+if ($search !== '') {
+    $masterSearchSql = ' AND u.name LIKE :search ';
+    $masterSearchParams['search'] = '%' . $search . '%';
+    $payrollSearchSql = ' AND u.name LIKE :search ';
+    $payrollSearchParams['search'] = '%' . $search . '%';
+}
+
+$totalMasters = (int) (fetch_one(
+    'SELECT COUNT(*) AS total
+     FROM master_gaji mg
+     JOIN users u ON u.id = mg.user_id
+     WHERE u.unit_id = :unit_id AND u.role != "owner"' . $masterSearchSql,
+    ['unit_id' => $user['unit_id']] + $masterSearchParams
+)['total'] ?? 0);
+$masterPages = max(1, (int) ceil($totalMasters / $pageSize));
+$masterPage = min($masterPage, $masterPages);
+$masterOffset = ($masterPage - 1) * $pageSize;
+
 $masters = fetch_all(
     'SELECT mg.*, u.name, u.jabatan
      FROM master_gaji mg
      JOIN users u ON u.id = mg.user_id
-     WHERE u.unit_id = :unit_id AND u.role != "owner"
-     ORDER BY u.name',
-    ['unit_id' => $user['unit_id']]
+     WHERE u.unit_id = :unit_id AND u.role != "owner"' . $masterSearchSql . '
+     ORDER BY u.name
+     LIMIT ' . $pageSize . ' OFFSET ' . $masterOffset,
+    ['unit_id' => $user['unit_id']] + $masterSearchParams
 );
+
+$totalPayrolls = (int) (fetch_one(
+    'SELECT COUNT(*) AS total
+     FROM penggajian p
+     JOIN users u ON u.id = p.user_id
+     WHERE u.unit_id = :unit_id' . $payrollSearchSql,
+    ['unit_id' => $user['unit_id']] + $payrollSearchParams
+)['total'] ?? 0);
+$payrollPages = max(1, (int) ceil($totalPayrolls / $pageSize));
+$payrollPage = min($payrollPage, $payrollPages);
+$payrollOffset = ($payrollPage - 1) * $pageSize;
 
 $payrolls = fetch_all(
     'SELECT p.*, u.name
      FROM penggajian p
      JOIN users u ON u.id = p.user_id
-     WHERE u.unit_id = :unit_id
+     WHERE u.unit_id = :unit_id' . $payrollSearchSql . '
      ORDER BY p.id DESC
-     LIMIT 20',
-    ['unit_id' => $user['unit_id']]
+     LIMIT ' . $pageSize . ' OFFSET ' . $payrollOffset,
+    ['unit_id' => $user['unit_id']] + $payrollSearchParams
 );
 
 $masterRows = '';
@@ -138,13 +176,43 @@ echo '<div class="space-y-6">';
 echo ui_panel('Validasi Master Gaji', ui_table(
     ['Karyawan', 'Jabatan', 'Gaji Pokok', 'Denda Telat', 'Tunjangan Makan', 'Tunjangan Jabatan', 'Aksi'],
     $masterRows !== '' ? $masterRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>',
-    ['numeric_columns' => [2, 3, 4, 5], 'storage_key' => 'validasi-master-gaji']
+    [
+        'numeric_columns' => [2, 3, 4, 5],
+        'storage_key' => 'validasi-master-gaji',
+        'server_pagination' => [
+            'section' => 'validasi',
+            'current_page' => $masterPage,
+            'total_pages' => $masterPages,
+            'total_items' => $totalMasters,
+            'page_param' => 'master_page',
+            'params' => [
+                'payroll_page' => $payrollPage,
+                'search' => $search,
+            ],
+            'search' => $search,
+        ],
+    ]
 ), ['subtitle' => 'Basis angka default penggajian sesuai flow lama']);
 
 echo ui_panel('Override Payroll', ui_table(
     ['Karyawan', 'Periode', 'Gaji Pokok', 'Pot. Telat', 'Pot. Khusus/Hutang', 'Gaji Bersih', 'Aksi'],
     $payrollRows !== '' ? $payrollRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada payroll untuk divalidasi.</td></tr>',
-    ['numeric_columns' => [2, 3, 4, 5], 'storage_key' => 'validasi-override-payroll']
+    [
+        'numeric_columns' => [2, 3, 4, 5],
+        'storage_key' => 'validasi-override-payroll',
+        'server_pagination' => [
+            'section' => 'validasi',
+            'current_page' => $payrollPage,
+            'total_pages' => $payrollPages,
+            'total_items' => $totalPayrolls,
+            'page_param' => 'payroll_page',
+            'params' => [
+                'master_page' => $masterPage,
+                'search' => $search,
+            ],
+            'search' => $search,
+        ],
+    ]
 ), ['subtitle' => 'Ruang validasi manual setelah generate penggajian']);
 echo '</div>';
 echo $masterModals . $payrollModals;

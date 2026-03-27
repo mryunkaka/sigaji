@@ -3,12 +3,32 @@
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
 
+$pageSize = 25;
+$currentPage = max(1, (int) request_value('page', 1));
+$search = trim((string) request_value('search', ''));
+$searchSql = '';
+$searchParams = [];
+if ($search !== '') {
+    $searchSql = ' AND name LIKE :search ';
+    $searchParams['search'] = '%' . $search . '%';
+}
+$totalUsers = (int) (fetch_one(
+    'SELECT COUNT(*) AS total
+     FROM users
+     WHERE unit_id = :unit_id' . $searchSql,
+    ['unit_id' => $authUser['unit_id']] + $searchParams
+)['total'] ?? 0);
+$totalPages = max(1, (int) ceil($totalUsers / $pageSize));
+$currentPage = min($currentPage, $totalPages);
+$offset = ($currentPage - 1) * $pageSize;
+
 $users = fetch_all(
     'SELECT *
      FROM users
-     WHERE unit_id = :unit_id
-     ORDER BY name',
-    ['unit_id' => $authUser['unit_id']]
+     WHERE unit_id = :unit_id' . $searchSql . '
+     ORDER BY name
+     LIMIT ' . $pageSize . ' OFFSET ' . $offset,
+    ['unit_id' => $authUser['unit_id']] + $searchParams
 );
 
 $renderUserForm = static function (array $item, string $modalId, int $unitId, bool $isCreate = false): string {
@@ -42,6 +62,8 @@ $renderUserForm = static function (array $item, string $modalId, int $unitId, bo
         . '</form>';
 };
 
+$tableId = 'users-table';
+$bulkDeleteFormId = 'users-bulk-delete';
 $rows = '';
 $modals = '';
 $createModalId = 'user-create';
@@ -51,8 +73,13 @@ foreach ($users as $item) {
     $editModalId = 'user-edit-' . $item['id'];
     $deleteModalId = 'user-delete-' . $item['id'];
     $foto = !empty($item['foto']) ? '<img src="' . e($item['foto']) . '" alt="' . e($item['name']) . '" class="h-12 w-12 rounded-2xl object-cover">' : '<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-sm font-semibold text-slate-500">' . e(strtoupper(substr($item['name'], 0, 1))) . '</div>';
+    $isCurrentUser = (int) $item['id'] === (int) $authUser['id'];
+    $selectCell = $isCurrentUser
+        ? '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 opacity-40" disabled title="User yang sedang login tidak bisa dihapus">'
+        : '<input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select>';
 
     $rows .= '<tr>
+        <td class="px-3 py-3 text-center">' . $selectCell . '</td>
         <td class="px-4 py-3">' . $foto . '</td>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e($item['email']) . '</td>
@@ -105,15 +132,47 @@ foreach ($users as $item) {
 
 $modals .= ui_modal($createModalId, 'Tambah User', $renderUserForm([], $createModalId, (int) $authUser['unit_id'], true), ['max_width' => 'max-w-5xl']);
 
+$bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_user_bulk.php" method="post" data-ajax-form class="hidden">'
+    . csrf_input()
+    . '<input type="hidden" name="ids" value="">'
+    . '</form>';
+
 echo '<div class="space-y-6">';
-echo ui_panel('Data User', '<div class="mb-4 flex justify-end">'
+echo ui_panel('Data User', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
+    . '<div class="flex flex-wrap gap-3">'
     . ui_button('Tambah User', ['icon' => 'plus', 'variant' => 'primary', 'attrs' => ['data-open-modal' => $createModalId]])
+    . ui_button('Hapus Permanen', [
+        'icon' => 'trash',
+        'variant' => 'danger',
+        'attrs' => [
+            'data-bulk-delete' => '1',
+            'data-table-target' => $tableId,
+            'data-form-target' => $bulkDeleteFormId,
+            'data-bulk-item-label' => 'user',
+            'data-bulk-empty-message' => 'Pilih user yang ingin dihapus.',
+            'data-bulk-confirm-message' => 'Hapus permanen {count} user terpilih?',
+        ],
+    ])
+    . '</div>'
     . '</div>'
     . ui_table(
-        [['label' => 'Foto', 'sortable' => false], 'Nama', 'Email', 'No. HP', 'Jabatan', 'Role', 'Tanggal Bergabung', ['label' => 'Aksi', 'sortable' => false]],
-        $rows !== '' ? $rows : '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Belum ada user pada unit aktif.</td></tr>',
-        ['storage_key' => 'users-list', 'search_column' => 1]
-    ),
+        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], ['label' => 'Foto', 'sortable' => false], 'Nama', 'Email', 'No. HP', 'Jabatan', 'Role', 'Tanggal Bergabung', ['label' => 'Aksi', 'sortable' => false]],
+        $rows !== '' ? $rows : '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Belum ada user pada unit aktif.</td></tr>',
+        [
+            'storage_key' => 'users-list',
+            'search_column' => 2,
+            'table_id' => $tableId,
+            'server_pagination' => [
+                'section' => 'users',
+                'current_page' => $currentPage,
+                'total_pages' => $totalPages,
+                'total_items' => $totalUsers,
+                'page_param' => 'page',
+                'params' => ['search' => $search],
+                'search' => $search,
+            ],
+        ]
+    ) . $bulkDeleteForm,
     ['subtitle' => 'Mirror halaman user lama dengan scope per unit aktif.']
 );
 echo '</div>';
