@@ -294,13 +294,19 @@ echo ui_panel('Riwayat Absensi',
     '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
     . '<div class="flex flex-wrap gap-3">'
     . ui_button('Tambah Absensi Manual', ['icon' => 'plus', 'variant' => 'primary', 'attrs' => ['data-open-modal' => $createModalId]])
-    . ui_button('Hapus Permanen', ['icon' => 'trash', 'variant' => 'danger', 'attrs' => ['data-bulk-delete' => '1', 'data-table-target' => $tableId, 'data-form-target' => $bulkDeleteFormId]])
     . '</div>'
     . '</div>'
     . ui_table(
     [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Nama', 'Jabatan', 'Tanggal', 'Status', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Telat', 'Potongan', 'Aksi'],
     $tableRows !== '' ? $tableRows : '<tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">Belum ada data absensi.</td></tr>',
     [
+        'bulk_actions' => [
+            'form_id' => $bulkDeleteFormId,
+            'item_label' => 'data absensi',
+            'total_items' => $totalRecords,
+            'empty_message' => 'Pilih data absensi yang ingin dihapus.',
+            'confirm_message' => 'Hapus permanen {count} data absensi terpilih?',
+        ],
         'numeric_columns' => [8, 9],
         'storage_key' => 'absensi-history',
         'search_column' => 1,

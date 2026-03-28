@@ -18,6 +18,13 @@ $totalUsers = (int) (fetch_one(
      WHERE unit_id = :unit_id' . $searchSql,
     ['unit_id' => $authUser['unit_id']] + $searchParams
 )['total'] ?? 0);
+$totalSelectableUsers = (int) (fetch_one(
+    'SELECT COUNT(*) AS total
+     FROM users
+     WHERE unit_id = :unit_id
+       AND id != :auth_id' . $searchSql,
+    ['unit_id' => $authUser['unit_id'], 'auth_id' => $authUser['id']] + $searchParams
+)['total'] ?? 0);
 $totalPages = max(1, (int) ceil($totalUsers / $pageSize));
 $currentPage = min($currentPage, $totalPages);
 $offset = ($currentPage - 1) * $pageSize;
@@ -141,24 +148,19 @@ echo '<div class="space-y-6">';
 echo ui_panel('Data User', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
     . '<div class="flex flex-wrap gap-3">'
     . ui_button('Tambah User', ['icon' => 'plus', 'variant' => 'primary', 'attrs' => ['data-open-modal' => $createModalId]])
-    . ui_button('Hapus Permanen', [
-        'icon' => 'trash',
-        'variant' => 'danger',
-        'attrs' => [
-            'data-bulk-delete' => '1',
-            'data-table-target' => $tableId,
-            'data-form-target' => $bulkDeleteFormId,
-            'data-bulk-item-label' => 'user',
-            'data-bulk-empty-message' => 'Pilih user yang ingin dihapus.',
-            'data-bulk-confirm-message' => 'Hapus permanen {count} user terpilih?',
-        ],
-    ])
     . '</div>'
     . '</div>'
     . ui_table(
         [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], ['label' => 'Foto', 'sortable' => false], 'Nama', 'Email', 'No. HP', 'Jabatan', 'Role', 'Tanggal Bergabung', ['label' => 'Aksi', 'sortable' => false]],
         $rows !== '' ? $rows : '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Belum ada user pada unit aktif.</td></tr>',
         [
+            'bulk_actions' => [
+                'form_id' => $bulkDeleteFormId,
+                'item_label' => 'user',
+                'total_items' => $totalSelectableUsers,
+                'empty_message' => 'Pilih user yang ingin dihapus.',
+                'confirm_message' => 'Hapus permanen {count} user terpilih?',
+            ],
             'storage_key' => 'users-list',
             'search_column' => 2,
             'table_id' => $tableId,

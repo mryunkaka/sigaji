@@ -215,26 +215,17 @@ $payrollBulkDeleteForm = '<form id="' . e($payrollBulkDeleteFormId) . '" action=
     . '</form>';
 
 echo '<div class="space-y-6">';
-echo ui_panel('Validasi Master Gaji', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
-    . '<div class="flex flex-wrap gap-3">'
-    . ui_button('Hapus Permanen', [
-        'icon' => 'trash',
-        'variant' => 'danger',
-        'attrs' => [
-            'data-bulk-delete' => '1',
-            'data-table-target' => $masterTableId,
-            'data-form-target' => $masterBulkDeleteFormId,
-            'data-bulk-item-label' => 'master gaji',
-            'data-bulk-empty-message' => 'Pilih master gaji yang ingin dihapus.',
-            'data-bulk-confirm-message' => 'Hapus permanen {count} master gaji terpilih?',
-        ],
-    ])
-    . '</div>'
-    . '</div>'
-    . ui_table(
+echo ui_panel('Validasi Master Gaji', ui_table(
         [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Jabatan', 'Gaji Pokok', 'Denda Telat', 'Tunjangan Makan', 'Tunjangan Jabatan', ['label' => 'Aksi', 'sortable' => false]],
         $masterRows !== '' ? $masterRows : '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>',
         [
+            'bulk_actions' => [
+                'form_id' => $masterBulkDeleteFormId,
+                'item_label' => 'master gaji',
+                'total_items' => $totalMasters,
+                'empty_message' => 'Pilih master gaji yang ingin dihapus.',
+                'confirm_message' => 'Hapus permanen {count} master gaji terpilih?',
+            ],
             'numeric_columns' => [3, 4, 5, 6],
             'storage_key' => 'validasi-master-gaji',
             'table_id' => $masterTableId,
@@ -255,26 +246,17 @@ echo ui_panel('Validasi Master Gaji', '<div class="mb-4 flex flex-col gap-3 sm:f
     ['subtitle' => 'Basis angka default penggajian sesuai flow lama']
 );
 
-echo ui_panel('Override Payroll', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
-    . '<div class="flex flex-wrap gap-3">'
-    . ui_button('Hapus Permanen', [
-        'icon' => 'trash',
-        'variant' => 'danger',
-        'attrs' => [
-            'data-bulk-delete' => '1',
-            'data-table-target' => $payrollTableId,
-            'data-form-target' => $payrollBulkDeleteFormId,
-            'data-bulk-item-label' => 'payroll',
-            'data-bulk-empty-message' => 'Pilih payroll yang ingin dihapus.',
-            'data-bulk-confirm-message' => 'Hapus permanen {count} payroll terpilih?',
-        ],
-    ])
-    . '</div>'
-    . '</div>'
-    . ui_table(
+echo ui_panel('Override Payroll', ui_table(
         [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Periode', 'Gaji Pokok', 'Pot. Telat', 'Pot. Khusus/Hutang', 'Gaji Bersih', ['label' => 'Aksi', 'sortable' => false]],
         $payrollRows !== '' ? $payrollRows : '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Belum ada payroll untuk divalidasi.</td></tr>',
         [
+            'bulk_actions' => [
+                'form_id' => $payrollBulkDeleteFormId,
+                'item_label' => 'payroll',
+                'total_items' => $totalPayrolls,
+                'empty_message' => 'Pilih payroll yang ingin dihapus.',
+                'confirm_message' => 'Hapus permanen {count} payroll terpilih?',
+            ],
             'numeric_columns' => [3, 4, 5, 6],
             'storage_key' => 'validasi-override-payroll',
             'table_id' => $payrollTableId,

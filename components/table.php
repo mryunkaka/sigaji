@@ -8,7 +8,9 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
     $storageKey = $options['storage_key'] ?? null;
     $tableId = $options['table_id'] ?? ('table-' . bin2hex(random_bytes(4)));
     $serverPagination = $options['server_pagination'] ?? null;
+    $bulkActions = is_array($options['bulk_actions'] ?? null) ? $options['bulk_actions'] : null;
     $serverSearchValue = '';
+    $totalSelectableItems = 0;
     $thead = '';
     foreach ($headers as $index => $header) {
         $label = is_array($header) ? ($header['label'] ?? '') : $header;
@@ -63,6 +65,7 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
         $totalItems = max(0, (int) ($serverPagination['total_items'] ?? 0));
         $params = is_array($serverPagination['params'] ?? null) ? $serverPagination['params'] : [];
         $serverSearchValue = (string) ($serverPagination['search'] ?? '');
+        $totalSelectableItems = max(0, (int) ($bulkActions['total_items'] ?? $totalItems));
         $pageParam = (string) ($serverPagination['page_param'] ?? 'page');
         $prevParams = $params;
         $nextParams = $params;
@@ -77,11 +80,48 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
             . '</div>';
     }
 
+    $bulkToolbar = '';
+    if ($bulkActions !== null) {
+        $itemLabel = (string) ($bulkActions['item_label'] ?? 'data');
+        $emptyMessage = (string) ($bulkActions['empty_message'] ?? ('Pilih ' . $itemLabel . ' yang ingin dihapus.'));
+        $confirmMessage = (string) ($bulkActions['confirm_message'] ?? ('Hapus permanen {count} ' . $itemLabel . ' terpilih?'));
+        $formId = (string) ($bulkActions['form_id'] ?? '');
+        $deleteButton = ui_button('Hapus Terpilih', [
+            'icon' => 'trash',
+            'variant' => 'danger',
+            'attrs' => [
+                'data-bulk-delete' => '1',
+                'data-table-target' => $tableId,
+                'data-form-target' => $formId,
+                'data-bulk-item-label' => $itemLabel,
+                'data-bulk-empty-message' => $emptyMessage,
+                'data-bulk-confirm-message' => $confirmMessage,
+            ],
+        ]);
+
+        $bulkToolbar = '
+        <div class="hidden border-b border-slate-200 bg-white/95 px-4 py-4" data-table-selection-bar>
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                    ' . $deleteButton . '
+                    <p class="text-sm font-semibold text-slate-700" data-table-selection-count>0 data dipilih</p>
+                </div>
+                <div class="flex items-center gap-4 text-sm font-semibold">
+                    <button type="button" class="hidden text-amber-600 transition hover:text-amber-700" data-table-select-all-results>
+                        Select all <span data-table-select-all-count>' . e((string) $totalSelectableItems) . '</span>
+                    </button>
+                    <button type="button" class="hidden text-rose-500 transition hover:text-rose-600" data-table-clear-selection>Deselect all</button>
+                </div>
+            </div>
+        </div>';
+    }
+
     return '
     <div id="' . e($tableId) . '" class="data-table relative max-w-full overflow-hidden rounded-[30px] border border-slate-200/80 bg-white/95 shadow-[0_18px_48px_rgba(15,23,42,.06)]"
         data-search-column="' . $searchColumn . '"
         data-numeric-columns="' . e(json_encode(array_values($numericColumns))) . '"
         data-storage-key="' . e((string) $storageKey) . '"'
+        . ($bulkActions !== null ? ' data-bulk-enabled="true" data-total-items="' . e((string) $totalSelectableItems) . '"' : '')
         . ($serverPagination !== null ? ' data-server-section="' . e($section) . '" data-server-params="' . e(json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '"' : '')
         . '>
         <div class="absolute inset-0 z-10 flex items-center justify-center bg-white/80 px-4 text-sm font-medium text-slate-500 backdrop-blur-sm" data-table-loader>
@@ -95,6 +135,7 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
                 <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="Cari nama..." data-table-search>
             </div>
         </div>
+        ' . $bulkToolbar . '
         <div class="max-w-full overflow-x-auto overflow-y-hidden">
             <table class="min-w-full w-max table-auto divide-y divide-slate-200 [&_tbody_td]:align-middle [&_tbody_td]:whitespace-nowrap [&_thead_th]:whitespace-nowrap [&_tbody_td:first-child]:w-10 [&_tbody_td:first-child]:px-3 [&_tbody_td:first-child]:text-center [&_thead_th:first-child]:w-10 [&_thead_th:first-child]:px-3 [&_thead_th:first-child]:text-center">
                 <thead class="bg-slate-50/85 backdrop-blur"><tr>' . $thead . '</tr></thead>

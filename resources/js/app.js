@@ -6,6 +6,7 @@
   let currentSection = localStorage.getItem(STORAGE_KEY) || window.location.hash.replace('#', '') || 'dashboard';
   let sectionParams = {};
   let tableStates = {};
+  let tableSelections = {};
 
   try {
     sectionParams = JSON.parse(localStorage.getItem(PARAMS_KEY) || '{}') || {};
@@ -20,6 +21,10 @@
   }
 
   const anyModalOpen = () => document.querySelector('[data-modal].is-open') !== null;
+  const getActiveModal = () => {
+    const openModals = Array.from(document.querySelectorAll('[data-modal].is-open'));
+    return openModals.at(-1) || null;
+  };
 
   const openModalById = (id) => {
     const modal = document.getElementById(id);
@@ -248,6 +253,54 @@
 
   const formatNumber = (value) => new Intl.NumberFormat('id-ID').format(value);
 
+  const recalculatePayrollForm = (form) => {
+    if (!form) {
+      return;
+    }
+
+    const readNumber = (name) => {
+      const field = form.querySelector(`[name="${name}"]`);
+      if (!field) {
+        return 0;
+      }
+      const value = Number(field.value || 0);
+      return Number.isFinite(value) ? value : 0;
+    };
+
+    const earningFields = [
+      'gaji_pokok',
+      'tunjangan_bbm',
+      'tunjangan_makan',
+      'tunjangan_jabatan',
+      'tunjangan_kehadiran',
+      'tunjangan_lainnya',
+      'lembur',
+    ];
+    const deductionFields = [
+      'potongan_kehadiran',
+      'potongan_khusus',
+      'potongan_ijin',
+      'potongan_terlambat',
+      'pot_bpjs_jht',
+      'pot_bpjs_kes',
+    ];
+
+    const gajiKotor = earningFields.reduce((sum, name) => sum + readNumber(name), 0);
+    const totalPotongan = deductionFields.reduce((sum, name) => sum + readNumber(name), 0);
+    const gajiBersih = gajiKotor - totalPotongan;
+
+    const updateOutput = (name, value) => {
+      const field = form.querySelector(`[name="${name}"]`);
+      if (field) {
+        field.value = String(value);
+      }
+    };
+
+    updateOutput('gaji_kotor', gajiKotor);
+    updateOutput('total_potongan', totalPotongan);
+    updateOutput('gaji_bersih', gajiBersih);
+  };
+
   const setTableLoaderState = (wrapper, loading) => {
     const loader = wrapper.querySelector('[data-table-loader]');
     if (!loader) {
@@ -275,16 +328,20 @@
     const nextButton = wrapper.querySelector('[data-table-next]');
     const meta = wrapper.querySelector('[data-table-meta]');
     const pageLabel = wrapper.querySelector('[data-table-page]');
-    const footerCells = Array.from(wrapper.querySelectorAll('[data-footer-cell]'));
-    const selectAll = wrapper.querySelector('[data-table-select-all]');
+    const selectAllCheckbox = wrapper.querySelector('[data-table-select-all]');
+    const selectionBar = wrapper.querySelector('[data-table-selection-bar]');
+    const selectionCount = wrapper.querySelector('[data-table-selection-count]');
+    const selectAllResultsButton = wrapper.querySelector('[data-table-select-all-results]');
+    const selectAllCount = wrapper.querySelector('[data-table-select-all-count]');
+    const clearSelectionButton = wrapper.querySelector('[data-table-clear-selection]');
     const searchColumn = Number(wrapper.dataset.searchColumn || 0);
-    const numericColumns = JSON.parse(wrapper.dataset.numericColumns || '[]');
     const stateKey = wrapper.dataset.storageKey || `${currentSection}-table`;
     const savedState = tableStates[stateKey] || {};
     let currentPage = Number(savedState.currentPage || 1);
     let sortIndex = savedState.sortIndex ?? null;
     let sortDirection = savedState.sortDirection || 'asc';
     let serverParams = {};
+    let currentFilteredCount = Number(wrapper.dataset.totalItems || allRows.length);
 
     try {
       serverParams = JSON.parse(serverParamsRaw) || {};
@@ -292,14 +349,150 @@
       serverParams = {};
     }
 
-    const syncSelectionState = () => {
-      if (!selectAll) {
+    const selectionSignature = `${serverSection || 'local'}|${JSON.stringify(serverParams)}|${searchInput?.value || ''}`;
+    const createSelectionState = () => ({
+      signature: selectionSignature,
+      allFiltered: false,
+      includedIds: new Set(),
+      excludedIds: new Set(),
+    });
+
+    let selectionState = tableSelections[stateKey];
+    if (!selectionState || selectionState.signature !== selectionSignature || !(selectionState.includedIds instanceof Set) || !(selectionState.excludedIds instanceof Set)) {
+      selectionState = createSelectionState();
+      tableSelections[stateKey] = selectionState;
+    }
+
+    const getVisibleCheckboxes = () => Array.from(tbody.querySelectorAll('[data-table-select]')).filter((checkbox) => !checkbox.disabled);
+    const getSelectedCount = () => {
+      if (selectionState.allFiltered) {
+        return Math.max(0, currentFilteredCount - selectionState.excludedIds.size);
+      }
+      return selectionState.includedIds.size;
+    };
+
+    const isSelected = (id) => {
+      if (selectionState.allFiltered) {
+        return !selectionState.excludedIds.has(id);
+      }
+      return selectionState.includedIds.has(id);
+    };
+
+    const syncVisibleSelection = () => {
+      getVisibleCheckboxes().forEach((checkbox) => {
+        checkbox.checked = isSelected(checkbox.value);
+      });
+    };
+
+    const syncHeaderSelection = () => {
+      if (!selectAllCheckbox) {
         return;
       }
-      const visibleCheckboxes = Array.from(tbody.querySelectorAll('[data-table-select]'));
+      const visibleCheckboxes = getVisibleCheckboxes();
       const checkedCount = visibleCheckboxes.filter((checkbox) => checkbox.checked).length;
-      selectAll.checked = visibleCheckboxes.length > 0 && checkedCount === visibleCheckboxes.length;
-      selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCheckboxes.length;
+      selectAllCheckbox.checked = visibleCheckboxes.length > 0 && checkedCount === visibleCheckboxes.length;
+      selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < visibleCheckboxes.length;
+    };
+
+    const updateSelectionUI = () => {
+      const selectedCount = getSelectedCount();
+
+      if (selectionBar) {
+        selectionBar.classList.toggle('hidden', selectedCount === 0);
+      }
+      if (selectionCount) {
+        selectionCount.textContent = `${formatNumber(selectedCount)} records selected`;
+      }
+      if (selectAllCount) {
+        selectAllCount.textContent = formatNumber(currentFilteredCount);
+      }
+      if (selectAllResultsButton) {
+        const shouldShowSelectAll = serverSection !== '' && !selectionState.allFiltered && selectedCount > 0 && currentFilteredCount > selectedCount;
+        selectAllResultsButton.classList.toggle('hidden', !shouldShowSelectAll);
+      }
+      if (clearSelectionButton) {
+        clearSelectionButton.classList.toggle('hidden', selectedCount === 0);
+      }
+    };
+
+    const resetSelectionState = () => {
+      selectionState = createSelectionState();
+      tableSelections[stateKey] = selectionState;
+      syncVisibleSelection();
+      syncHeaderSelection();
+      updateSelectionUI();
+    };
+
+    const applyCheckboxChange = (checkbox, checked) => {
+      const id = checkbox.value;
+      if (!id) {
+        return;
+      }
+
+      if (selectionState.allFiltered) {
+        if (checked) {
+          selectionState.excludedIds.delete(id);
+        } else {
+          selectionState.excludedIds.add(id);
+        }
+      } else if (checked) {
+        selectionState.includedIds.add(id);
+      } else {
+        selectionState.includedIds.delete(id);
+      }
+
+      syncHeaderSelection();
+      updateSelectionUI();
+    };
+
+    const toggleVisibleSelection = (checked) => {
+      getVisibleCheckboxes().forEach((checkbox) => {
+        checkbox.checked = checked;
+        applyCheckboxChange(checkbox, checked);
+      });
+    };
+
+    const populateBulkDeleteForm = (form) => {
+      const idsInput = form.querySelector('[name="ids"]');
+      if (!idsInput) {
+        return false;
+      }
+
+      const ensureInput = (name) => {
+        let input = form.querySelector(`[name="${name}"]`);
+        if (!input) {
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          form.appendChild(input);
+        }
+        return input;
+      };
+
+      const selectionMode = ensureInput('selection_mode');
+      const selectionParams = ensureInput('selection_params');
+      const excludedIds = ensureInput('excluded_ids');
+
+      if (selectionState.allFiltered) {
+        const params = { ...serverParams, search: searchInput?.value || serverParams.search || '' };
+        idsInput.value = '';
+        selectionMode.value = 'all_filtered';
+        selectionParams.value = JSON.stringify(params);
+        excludedIds.value = Array.from(selectionState.excludedIds).join(',');
+      } else {
+        idsInput.value = Array.from(selectionState.includedIds).join(',');
+        selectionMode.value = 'ids';
+        selectionParams.value = '';
+        excludedIds.value = '';
+      }
+
+      return true;
+    };
+
+    wrapper.__tableSelection = {
+      clear: resetSelectionState,
+      getSelectedCount,
+      populateBulkDeleteForm,
     };
 
     if (serverSection) {
@@ -312,20 +505,33 @@
         }, 300);
       });
 
-      selectAll?.addEventListener('change', () => {
-        tbody.querySelectorAll('[data-table-select]').forEach((checkbox) => {
-          checkbox.checked = selectAll.checked;
-        });
-        syncSelectionState();
+      selectAllCheckbox?.addEventListener('change', () => {
+        toggleVisibleSelection(selectAllCheckbox.checked);
+      });
+
+      selectAllResultsButton?.addEventListener('click', () => {
+        selectionState.allFiltered = true;
+        selectionState.includedIds.clear();
+        selectionState.excludedIds.clear();
+        syncVisibleSelection();
+        syncHeaderSelection();
+        updateSelectionUI();
+      });
+
+      clearSelectionButton?.addEventListener('click', () => {
+        resetSelectionState();
       });
 
       tbody.addEventListener('change', (event) => {
-        if (event.target.matches('[data-table-select]')) {
-          syncSelectionState();
+        if (!event.target.matches('[data-table-select]')) {
+          return;
         }
+        applyCheckboxChange(event.target, event.target.checked);
       });
 
-      syncSelectionState();
+      syncVisibleSelection();
+      syncHeaderSelection();
+      updateSelectionUI();
       setTableLoaderState(wrapper, false);
       wrapper.dataset.bound = 'true';
       return;
@@ -379,6 +585,7 @@
         });
       }
 
+      currentFilteredCount = filteredRows.length;
       const limitValue = limitSelect?.value || '10';
       const pageSize = limitValue === 'all' ? filteredRows.length || 1 : Number(limitValue);
       const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -408,23 +615,9 @@
         nextButton.disabled = currentPage >= totalPages || limitValue === 'all';
       }
 
-      footerCells.forEach((cell, index) => {
-        if (index === 0) {
-          cell.textContent = `Total tampil: ${visibleRows.length} data`;
-          return;
-        }
-        if (!numericColumns.includes(index)) {
-          cell.innerHTML = '&nbsp;';
-          return;
-        }
-        const total = visibleRows.reduce((sum, row) => {
-          const value = parseNumericValue((row.children[index]?.textContent || '').trim());
-          return sum + (value ?? 0);
-        }, 0);
-        cell.textContent = formatNumber(total);
-      });
-
-      syncSelectionState();
+      syncVisibleSelection();
+      syncHeaderSelection();
+      updateSelectionUI();
       saveState();
       setTableLoaderState(wrapper, false);
     };
@@ -445,6 +638,7 @@
 
     searchInput?.addEventListener('input', () => {
       currentPage = 1;
+      resetSelectionState();
       render();
     });
 
@@ -469,17 +663,28 @@
       render();
     });
 
-    selectAll?.addEventListener('change', () => {
-      tbody.querySelectorAll('[data-table-select]').forEach((checkbox) => {
-        checkbox.checked = selectAll.checked;
-      });
-      syncSelectionState();
+    selectAllCheckbox?.addEventListener('change', () => {
+      toggleVisibleSelection(selectAllCheckbox.checked);
+    });
+
+    selectAllResultsButton?.addEventListener('click', () => {
+      selectionState.allFiltered = true;
+      selectionState.includedIds.clear();
+      selectionState.excludedIds.clear();
+      syncVisibleSelection();
+      syncHeaderSelection();
+      updateSelectionUI();
+    });
+
+    clearSelectionButton?.addEventListener('click', () => {
+      resetSelectionState();
     });
 
     tbody.addEventListener('change', (event) => {
-      if (event.target.matches('[data-table-select]')) {
-        syncSelectionState();
+      if (!event.target.matches('[data-table-select]')) {
+        return;
       }
+      applyCheckboxChange(event.target, event.target.checked);
     });
 
     render();
@@ -762,6 +967,10 @@
 
     showToast(result.message, result.success ? 'success' : 'error');
     if (result.success) {
+      const clearSelectionTarget = form.dataset.clearSelectionTarget || '';
+      if (clearSelectionTarget) {
+        document.getElementById(clearSelectionTarget)?.__tableSelection?.clear?.();
+      }
       if (result.closeModal) {
         closeModalById(result.closeModal);
       }
@@ -847,12 +1056,6 @@
       return;
     }
 
-    const backdrop = event.target.closest('[data-modal]');
-    if (backdrop && event.target === backdrop) {
-      closeModalById(backdrop.id);
-      return;
-    }
-
     const bulkDelete = event.target.closest('[data-bulk-delete]');
     if (!bulkDelete) {
       return;
@@ -860,31 +1063,34 @@
 
     const table = document.getElementById(bulkDelete.dataset.tableTarget || '');
     const form = document.getElementById(bulkDelete.dataset.formTarget || '');
-    const input = form?.querySelector('[name="ids"]');
+    const controller = table?.__tableSelection;
 
-    if (!table || !form || !input) {
+    if (!table || !form || !controller) {
       showToast('Form hapus massal tidak ditemukan.', 'error');
       return;
     }
 
-    const ids = Array.from(table.querySelectorAll('[data-table-select]:checked'))
-      .map((checkbox) => checkbox.value)
-      .filter(Boolean);
     const itemLabel = bulkDelete.dataset.bulkItemLabel || 'data';
     const emptyMessage = bulkDelete.dataset.bulkEmptyMessage || `Pilih ${itemLabel} yang ingin dihapus.`;
     const confirmMessageTemplate = bulkDelete.dataset.bulkConfirmMessage || `Hapus permanen {count} ${itemLabel} terpilih?`;
+    const selectedCount = controller.getSelectedCount();
 
-    if (ids.length === 0) {
+    if (selectedCount === 0) {
       showToast(emptyMessage, 'error');
       return;
     }
 
-    const confirmMessage = confirmMessageTemplate.replace('{count}', String(ids.length));
+    const confirmMessage = confirmMessageTemplate.replace('{count}', formatNumber(selectedCount));
     if (!window.confirm(confirmMessage)) {
       return;
     }
 
-    input.value = ids.join(',');
+    if (!controller.populateBulkDeleteForm(form)) {
+      showToast('Data seleksi tidak dapat diproses.', 'error');
+      return;
+    }
+
+    form.dataset.clearSelectionTarget = table.id;
     form.dataset.dirty = 'false';
     submitAjaxForm(form);
   });
@@ -911,9 +1117,19 @@
     if (form) {
       form.dataset.dirty = 'true';
     }
+
+    const payrollField = event.target.closest('[data-payroll-calc]');
+    if (payrollField) {
+      recalculatePayrollForm(payrollField.closest('[data-payroll-form]'));
+    }
   });
 
   document.addEventListener('change', (event) => {
+    const payrollField = event.target.closest('[data-payroll-calc]');
+    if (payrollField) {
+      recalculatePayrollForm(payrollField.closest('[data-payroll-form]'));
+    }
+
     const trigger = event.target.closest('[data-absensi-calc]');
     if (!trigger) {
       return;
@@ -964,6 +1180,19 @@
     if (nextSection && nextSection !== currentSection && !anyModalOpen()) {
       loadSection(nextSection, sectionParams[nextSection] || null);
     }
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    const activeModal = getActiveModal();
+    if (!activeModal) {
+      return;
+    }
+
+    closeModalById(activeModal.id);
   });
 
   window.addEventListener('resize', () => {

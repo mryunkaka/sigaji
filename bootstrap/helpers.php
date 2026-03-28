@@ -209,6 +209,27 @@ function request_value(string $key, $default = null)
     return $_POST[$key] ?? $_GET[$key] ?? $default;
 }
 
+function request_json_value(string $key, array $default = []): array
+{
+    $raw = request_value($key, '');
+    if (!is_string($raw) || trim($raw) === '') {
+        return $default;
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : $default;
+}
+
+function request_int_list(string $key): array
+{
+    $raw = (string) request_value($key, '');
+    if ($raw === '') {
+        return [];
+    }
+
+    return array_values(array_unique(array_filter(array_map('intval', explode(',', $raw)))));
+}
+
 function expects_json(): bool
 {
     $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));

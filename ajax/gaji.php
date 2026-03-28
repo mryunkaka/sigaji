@@ -135,6 +135,19 @@ $payrolls = fetch_all(
     ['unit_id' => $user['unit_id'], 'filter_start' => $startDate, 'filter_end' => $endDate] + $searchParams
 );
 
+$employees = fetch_all(
+    'SELECT id, name
+     FROM users
+     WHERE unit_id = :unit_id
+       AND role != :role
+     ORDER BY name',
+    ['unit_id' => $user['unit_id'], 'role' => 'owner']
+);
+$employeeOptions = [];
+foreach ($employees as $employee) {
+    $employeeOptions[$employee['id']] = $employee['name'];
+}
+
 $generatedPeriods = fetch_all(
     'SELECT p.tanggal_awal_gaji, p.tanggal_akhir_gaji, COUNT(*) AS total_karyawan
      FROM penggajian p
@@ -162,8 +175,46 @@ $tableId = 'gaji-table';
 $bulkDeleteFormId = 'gaji-bulk-delete';
 $tableRows = '';
 $modals = '';
+$renderPayrollEditForm = static function (array $item, string $modalId, array $employeeOptions): string {
+    $infoFields = '<div class="md:col-span-2 xl:col-span-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">'
+        . ui_input('id_display', 'ID Payroll', $item['id'], 'text', ['readonly' => 'readonly'])
+        . ui_input('created_at_display', 'Created At', (string) ($item['created_at'] ?? '-'), 'text', ['readonly' => 'readonly'])
+        . ui_input('updated_at_display', 'Updated At', (string) ($item['updated_at'] ?? '-'), 'text', ['readonly' => 'readonly'])
+        . '</div>';
+
+    $componentFields = ui_select('user_id', 'Karyawan', $employeeOptions, $item['user_id'], ['required' => 'required'])
+        . ui_input('tanggal_awal_gaji', 'Tanggal Awal Gaji', $item['tanggal_awal_gaji'], 'date', ['required' => 'required'])
+        . ui_input('tanggal_akhir_gaji', 'Tanggal Akhir Gaji', $item['tanggal_akhir_gaji'], 'date', ['required' => 'required'])
+        . ui_input('gaji_pokok', 'Gaji Pokok', $item['gaji_pokok'], 'number', ['min' => '0', 'data-payroll-calc' => 'earning'])
+        . ui_input('tunjangan_bbm', 'Tunjangan BBM', $item['tunjangan_bbm'], 'number', ['min' => '0', 'data-payroll-calc' => 'earning'])
+        . ui_input('tunjangan_makan', 'Tunjangan Makan', $item['tunjangan_makan'], 'number', ['min' => '0', 'data-payroll-calc' => 'earning'])
+        . ui_input('tunjangan_jabatan', 'Tunjangan Jabatan', $item['tunjangan_jabatan'], 'number', ['min' => '0', 'data-payroll-calc' => 'earning'])
+        . ui_input('tunjangan_kehadiran', 'Tunjangan Kehadiran', $item['tunjangan_kehadiran'], 'number', ['min' => '0', 'data-payroll-calc' => 'earning'])
+        . ui_input('tunjangan_lainnya', 'Tunjangan Lainnya', $item['tunjangan_lainnya'], 'number', ['min' => '0', 'data-payroll-calc' => 'earning'])
+        . ui_input('lembur', 'Lembur', $item['lembur'], 'number', ['min' => '0', 'data-payroll-calc' => 'earning'])
+        . ui_input('potongan_kehadiran', 'Potongan Kehadiran', $item['potongan_kehadiran'], 'number', ['min' => '0', 'data-payroll-calc' => 'deduction'])
+        . ui_input('potongan_khusus', 'Potongan Khusus', $item['potongan_khusus'], 'number', ['min' => '0', 'data-payroll-calc' => 'deduction'])
+        . ui_input('potongan_ijin', 'Potongan Ijin', $item['potongan_ijin'], 'number', ['min' => '0', 'data-payroll-calc' => 'deduction'])
+        . ui_input('potongan_terlambat', 'Potongan Terlambat', $item['potongan_terlambat'], 'number', ['min' => '0', 'data-payroll-calc' => 'deduction'])
+        . ui_input('pot_bpjs_jht', 'Potongan BPJS JHT', $item['pot_bpjs_jht'], 'number', ['min' => '0', 'data-payroll-calc' => 'deduction'])
+        . ui_input('pot_bpjs_kes', 'Potongan BPJS Kesehatan', $item['pot_bpjs_kes'], 'number', ['min' => '0', 'data-payroll-calc' => 'deduction'])
+        . ui_input('gaji_kotor', 'Gaji Kotor', $item['gaji_kotor'], 'number', ['readonly' => 'readonly', 'data-payroll-output' => 'gaji_kotor'])
+        . ui_input('total_potongan', 'Total Potongan', $item['total_potongan'], 'number', ['readonly' => 'readonly', 'data-payroll-output' => 'total_potongan'])
+        . ui_input('gaji_bersih', 'Gaji Bersih', $item['gaji_bersih'], 'number', ['readonly' => 'readonly', 'data-payroll-output' => 'gaji_bersih']);
+
+    return '<form action="ajax/save_penggajian.php" method="post" data-ajax-form data-payroll-form class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">'
+        . csrf_input()
+        . '<input type="hidden" name="modal_id" value="' . e($modalId) . '">'
+        . '<input type="hidden" name="reload_section" value="gaji">'
+        . '<input type="hidden" name="id" value="' . e((string) $item['id']) . '">'
+        . $infoFields
+        . $componentFields
+        . '<div class="md:col-span-2 xl:col-span-3 flex justify-end">' . ui_button('Simpan Payroll', ['type' => 'submit', 'variant' => 'success']) . '</div>'
+        . '</form>';
+};
 foreach ($payrolls as $item) {
     $viewModalId = 'gaji-view-' . $item['id'];
+    $editModalId = 'gaji-edit-' . $item['id'];
     $deleteModalId = 'gaji-delete-' . $item['id'];
     $tableRows .= '<tr>
         <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
@@ -175,6 +226,7 @@ foreach ($payrolls as $item) {
         <td class="px-4 py-3">
             <div class="flex flex-nowrap items-center gap-2">
                 ' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '
+                ' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $editModalId]]) . '
                 <a href="print_slip.php?id=' . e($item['id']) . '" target="_blank">' . ui_button('Slip', ['icon' => 'printer', 'variant' => 'secondary', 'icon_only' => true]) . '</a>
                 ' . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]]) . '
             </div>
@@ -216,6 +268,7 @@ foreach ($payrolls as $item) {
         . '</div></form>';
 
     $modals .= ui_modal($viewModalId, 'Detail Penggajian', $viewBody, ['max_width' => 'max-w-5xl']);
+    $modals .= ui_modal($editModalId, 'Edit Penggajian', $renderPayrollEditForm($item, $editModalId, $employeeOptions), ['max_width' => 'max-w-6xl']);
     $modals .= ui_modal($deleteModalId, 'Hapus Penggajian', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
@@ -286,26 +339,17 @@ echo '<div class="space-y-6">';
 echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Pilih periode kerja yang ingin dicek untuk generate dan laporan.']);
 echo ui_panel('Generate Penggajian', $generateFilterForm . '<div class="mt-6">' . $generateInfo . '</div><div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Cek dan generate payroll untuk rentang ' . $generateRangeLabel . '. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate pada rentang ini.']);
 echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Hanya periode payroll yang sudah digenerate pada filter aktif yang bisa dicetak.']);
-echo ui_panel('Daftar Penggajian', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
-    . '<div class="flex flex-wrap gap-3">'
-    . ui_button('Hapus Permanen', [
-        'icon' => 'trash',
-        'variant' => 'danger',
-        'attrs' => [
-            'data-bulk-delete' => '1',
-            'data-table-target' => $tableId,
-            'data-form-target' => $bulkDeleteFormId,
-            'data-bulk-item-label' => 'payroll',
-            'data-bulk-empty-message' => 'Pilih data payroll yang ingin dihapus.',
-            'data-bulk-confirm-message' => 'Hapus permanen {count} data payroll terpilih?',
-        ],
-    ])
-    . '</div>'
-    . '</div>'
-    . ui_table(
+echo ui_panel('Daftar Penggajian', ui_table(
         [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Periode', 'Gaji Kotor', 'Total Potongan', 'Gaji Bersih', ['label' => 'Aksi', 'sortable' => false]],
         $tableRows !== '' ? $tableRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada payroll pada periode filter ini.</td></tr>',
         [
+            'bulk_actions' => [
+                'form_id' => $bulkDeleteFormId,
+                'item_label' => 'payroll',
+                'total_items' => $totalPayrolls,
+                'empty_message' => 'Pilih data payroll yang ingin dihapus.',
+                'confirm_message' => 'Hapus permanen {count} data payroll terpilih?',
+            ],
             'numeric_columns' => [3, 4, 5],
             'storage_key' => 'gaji-daftar',
             'table_id' => $tableId,

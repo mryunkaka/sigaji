@@ -7,12 +7,26 @@ $pageSize = 25;
 $currentPage = max(1, (int) request_value('page', 1));
 $search = trim((string) request_value('search', ''));
 $searchSql = '';
+$searchCondition = '';
 $searchParams = [];
 if ($search !== '') {
     $searchSql = ' WHERE un.nama_unit LIKE :search ';
+    $searchCondition = ' AND un.nama_unit LIKE :search ';
     $searchParams['search'] = '%' . $search . '%';
 }
 $totalUnits = (int) (fetch_one('SELECT COUNT(*) AS total FROM units un' . $searchSql, $searchParams)['total'] ?? 0);
+$totalSelectableUnits = (int) (fetch_one(
+    'SELECT COUNT(*) AS total
+     FROM (
+        SELECT un.id
+        FROM units un
+        LEFT JOIN users usr ON usr.unit_id = un.id
+        WHERE un.id != :active_unit_id' . $searchCondition . '
+        GROUP BY un.id
+        HAVING COUNT(usr.id) = 0
+     ) selectable_units',
+    ['active_unit_id' => $authUser['unit_id']] + $searchParams
+)['total'] ?? 0);
 $totalPages = max(1, (int) ceil($totalUnits / $pageSize));
 $currentPage = min($currentPage, $totalPages);
 $offset = ($currentPage - 1) * $pageSize;
@@ -105,24 +119,19 @@ echo '<div class="space-y-6">';
 echo ui_panel('Data Unit', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
     . '<div class="flex flex-wrap gap-3">'
     . ui_button('Tambah Unit', ['icon' => 'plus', 'variant' => 'primary', 'attrs' => ['data-open-modal' => $createModalId]])
-    . ui_button('Hapus Permanen', [
-        'icon' => 'trash',
-        'variant' => 'danger',
-        'attrs' => [
-            'data-bulk-delete' => '1',
-            'data-table-target' => $tableId,
-            'data-form-target' => $bulkDeleteFormId,
-            'data-bulk-item-label' => 'unit',
-            'data-bulk-empty-message' => 'Pilih unit yang ingin dihapus.',
-            'data-bulk-confirm-message' => 'Hapus permanen {count} unit terpilih?',
-        ],
-    ])
     . '</div>'
     . '</div>'
     . ui_table(
         [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], ['label' => 'Logo', 'sortable' => false], 'Nama Unit', 'Alamat', 'Nomor HP', ['label' => 'Aksi', 'sortable' => false]],
         $rows !== '' ? $rows : '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Belum ada data unit.</td></tr>',
         [
+            'bulk_actions' => [
+                'form_id' => $bulkDeleteFormId,
+                'item_label' => 'unit',
+                'total_items' => $totalSelectableUnits,
+                'empty_message' => 'Pilih unit yang ingin dihapus.',
+                'confirm_message' => 'Hapus permanen {count} unit terpilih?',
+            ],
             'storage_key' => 'units-list',
             'search_column' => 1,
             'table_id' => $tableId,
