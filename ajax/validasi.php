@@ -60,21 +60,28 @@ $payrolls = fetch_all(
     ['unit_id' => $user['unit_id']] + $payrollSearchParams
 );
 
+$masterTableId = 'validasi-master-table';
+$masterBulkDeleteFormId = 'validasi-master-bulk-delete';
+$payrollTableId = 'validasi-payroll-table';
+$payrollBulkDeleteFormId = 'validasi-payroll-bulk-delete';
 $masterRows = '';
 $masterModals = '';
 foreach ($masters as $item) {
     $modalId = 'master-edit-' . $item['id'];
     $viewModalId = 'master-view-' . $item['id'];
+    $deleteModalId = 'master-delete-' . $item['id'];
     $masterRows .= '<tr>
+        <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e($item['jabatan'] ?: '-') . '</td>
         <td class="px-4 py-3">' . money($item['gaji_pokok']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_terlambat']) . '/menit</td>
         <td class="px-4 py-3">' . money($item['tunjangan_makan']) . '</td>
         <td class="px-4 py-3">' . money($item['tunjangan_jabatan']) . '</td>
-        <td class="px-4 py-3"><div class="flex flex-wrap gap-2">'
+        <td class="px-4 py-3"><div class="flex flex-nowrap items-center gap-2">'
             . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]])
             . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $modalId]])
+            . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]])
             . '</div></td>
     </tr>';
 
@@ -111,8 +118,18 @@ foreach ($masters as $item) {
         ], 3)
         . '</div>';
 
+    $deleteBody = '<form action="ajax/delete_master_gaji_bulk.php" method="post" data-ajax-form class="space-y-5">'
+        . csrf_input()
+        . '<input type="hidden" name="ids" value="' . e((string) $item['id']) . '">'
+        . '<p class="text-sm text-slate-600">Hapus master gaji <strong>' . e($item['name']) . '</strong> secara permanen?</p>'
+        . '<div class="flex justify-end gap-3">'
+        . ui_button('Batal', ['variant' => 'secondary', 'attrs' => ['data-close-modal' => $deleteModalId]])
+        . ui_button('Hapus Permanen', ['type' => 'submit', 'variant' => 'danger', 'icon' => 'trash'])
+        . '</div></form>';
+
     $masterModals .= ui_modal($viewModalId, 'Detail Master Gaji', $viewBody, ['max_width' => 'max-w-5xl']);
     $masterModals .= ui_modal($modalId, 'Validasi Master Gaji', $body);
+    $masterModals .= ui_modal($deleteModalId, 'Hapus Master Gaji', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
 $payrollRows = '';
@@ -120,16 +137,19 @@ $payrollModals = '';
 foreach ($payrolls as $item) {
     $modalId = 'payroll-edit-' . $item['id'];
     $viewModalId = 'payroll-view-' . $item['id'];
+    $deleteModalId = 'payroll-delete-' . $item['id'];
     $payrollRows .= '<tr>
+        <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_pokok']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_terlambat']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_khusus']) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
-        <td class="px-4 py-3"><div class="flex flex-wrap gap-2">'
+        <td class="px-4 py-3"><div class="flex flex-nowrap items-center gap-2">'
             . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]])
             . ui_button('Override', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $modalId]])
+            . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]])
             . '</div></td>
     </tr>';
 
@@ -168,51 +188,111 @@ foreach ($payrolls as $item) {
         ], 3)
         . '</div>';
 
+    $deleteBody = '<form action="ajax/delete_penggajian_bulk.php" method="post" data-ajax-form class="space-y-5">'
+        . csrf_input()
+        . '<input type="hidden" name="ids" value="' . e((string) $item['id']) . '">'
+        . '<input type="hidden" name="reload_section" value="validasi">'
+        . '<p class="text-sm text-slate-600">Hapus payroll <strong>' . e($item['name']) . '</strong> untuk periode <strong>' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</strong> secara permanen?</p>'
+        . '<div class="flex justify-end gap-3">'
+        . ui_button('Batal', ['variant' => 'secondary', 'attrs' => ['data-close-modal' => $deleteModalId]])
+        . ui_button('Hapus Permanen', ['type' => 'submit', 'variant' => 'danger', 'icon' => 'trash'])
+        . '</div></form>';
+
     $payrollModals .= ui_modal($viewModalId, 'Detail Payroll', $viewBody, ['max_width' => 'max-w-5xl']);
     $payrollModals .= ui_modal($modalId, 'Override Payroll', $body);
+    $payrollModals .= ui_modal($deleteModalId, 'Hapus Payroll', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
-echo '<div class="space-y-6">';
-echo ui_panel('Validasi Master Gaji', ui_table(
-    ['Karyawan', 'Jabatan', 'Gaji Pokok', 'Denda Telat', 'Tunjangan Makan', 'Tunjangan Jabatan', 'Aksi'],
-    $masterRows !== '' ? $masterRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>',
-    [
-        'numeric_columns' => [2, 3, 4, 5],
-        'storage_key' => 'validasi-master-gaji',
-        'server_pagination' => [
-            'section' => 'validasi',
-            'current_page' => $masterPage,
-            'total_pages' => $masterPages,
-            'total_items' => $totalMasters,
-            'page_param' => 'master_page',
-            'params' => [
-                'payroll_page' => $payrollPage,
-                'search' => $search,
-            ],
-            'search' => $search,
-        ],
-    ]
-), ['subtitle' => 'Basis angka default penggajian sesuai flow lama']);
+$masterBulkDeleteForm = '<form id="' . e($masterBulkDeleteFormId) . '" action="ajax/delete_master_gaji_bulk.php" method="post" data-ajax-form class="hidden">'
+    . csrf_input()
+    . '<input type="hidden" name="ids" value="">'
+    . '</form>';
 
-echo ui_panel('Override Payroll', ui_table(
-    ['Karyawan', 'Periode', 'Gaji Pokok', 'Pot. Telat', 'Pot. Khusus/Hutang', 'Gaji Bersih', 'Aksi'],
-    $payrollRows !== '' ? $payrollRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada payroll untuk divalidasi.</td></tr>',
-    [
-        'numeric_columns' => [2, 3, 4, 5],
-        'storage_key' => 'validasi-override-payroll',
-        'server_pagination' => [
-            'section' => 'validasi',
-            'current_page' => $payrollPage,
-            'total_pages' => $payrollPages,
-            'total_items' => $totalPayrolls,
-            'page_param' => 'payroll_page',
-            'params' => [
-                'master_page' => $masterPage,
+$payrollBulkDeleteForm = '<form id="' . e($payrollBulkDeleteFormId) . '" action="ajax/delete_penggajian_bulk.php" method="post" data-ajax-form class="hidden">'
+    . csrf_input()
+    . '<input type="hidden" name="ids" value="">'
+    . '<input type="hidden" name="reload_section" value="validasi">'
+    . '</form>';
+
+echo '<div class="space-y-6">';
+echo ui_panel('Validasi Master Gaji', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
+    . '<div class="flex flex-wrap gap-3">'
+    . ui_button('Hapus Permanen', [
+        'icon' => 'trash',
+        'variant' => 'danger',
+        'attrs' => [
+            'data-bulk-delete' => '1',
+            'data-table-target' => $masterTableId,
+            'data-form-target' => $masterBulkDeleteFormId,
+            'data-bulk-item-label' => 'master gaji',
+            'data-bulk-empty-message' => 'Pilih master gaji yang ingin dihapus.',
+            'data-bulk-confirm-message' => 'Hapus permanen {count} master gaji terpilih?',
+        ],
+    ])
+    . '</div>'
+    . '</div>'
+    . ui_table(
+        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Jabatan', 'Gaji Pokok', 'Denda Telat', 'Tunjangan Makan', 'Tunjangan Jabatan', ['label' => 'Aksi', 'sortable' => false]],
+        $masterRows !== '' ? $masterRows : '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>',
+        [
+            'numeric_columns' => [3, 4, 5, 6],
+            'storage_key' => 'validasi-master-gaji',
+            'table_id' => $masterTableId,
+            'server_pagination' => [
+                'section' => 'validasi',
+                'current_page' => $masterPage,
+                'total_pages' => $masterPages,
+                'total_items' => $totalMasters,
+                'page_param' => 'master_page',
+                'params' => [
+                    'payroll_page' => $payrollPage,
+                    'search' => $search,
+                ],
                 'search' => $search,
             ],
-            'search' => $search,
+        ]
+    ) . $masterBulkDeleteForm,
+    ['subtitle' => 'Basis angka default penggajian sesuai flow lama']
+);
+
+echo ui_panel('Override Payroll', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
+    . '<div class="flex flex-wrap gap-3">'
+    . ui_button('Hapus Permanen', [
+        'icon' => 'trash',
+        'variant' => 'danger',
+        'attrs' => [
+            'data-bulk-delete' => '1',
+            'data-table-target' => $payrollTableId,
+            'data-form-target' => $payrollBulkDeleteFormId,
+            'data-bulk-item-label' => 'payroll',
+            'data-bulk-empty-message' => 'Pilih payroll yang ingin dihapus.',
+            'data-bulk-confirm-message' => 'Hapus permanen {count} payroll terpilih?',
         ],
-    ]
-), ['subtitle' => 'Ruang validasi manual setelah generate penggajian']);
+    ])
+    . '</div>'
+    . '</div>'
+    . ui_table(
+        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Periode', 'Gaji Pokok', 'Pot. Telat', 'Pot. Khusus/Hutang', 'Gaji Bersih', ['label' => 'Aksi', 'sortable' => false]],
+        $payrollRows !== '' ? $payrollRows : '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Belum ada payroll untuk divalidasi.</td></tr>',
+        [
+            'numeric_columns' => [3, 4, 5, 6],
+            'storage_key' => 'validasi-override-payroll',
+            'table_id' => $payrollTableId,
+            'server_pagination' => [
+                'section' => 'validasi',
+                'current_page' => $payrollPage,
+                'total_pages' => $payrollPages,
+                'total_items' => $totalPayrolls,
+                'page_param' => 'payroll_page',
+                'params' => [
+                    'master_page' => $masterPage,
+                    'search' => $search,
+                ],
+                'search' => $search,
+            ],
+        ]
+    ) . $payrollBulkDeleteForm,
+    ['subtitle' => 'Ruang validasi manual setelah generate penggajian']
+);
 echo '</div>';
 echo $masterModals . $payrollModals;

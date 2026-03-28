@@ -168,6 +168,7 @@ $modals = '';
 foreach ($records as $item) {
     $modalId = 'absensi-edit-' . $item['id'];
     $viewModalId = 'absensi-view-' . $item['id'];
+    $deleteModalId = 'absensi-delete-' . $item['id'];
     $badgeTone = match ($item['status']) {
         'hadir' => 'emerald',
         'sakit', 'izin', 'cuti' => 'amber',
@@ -190,6 +191,7 @@ foreach ($records as $item) {
             <div class="flex flex-nowrap items-center gap-2">
                 ' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '
                 ' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $modalId]]) . '
+                ' . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]]) . '
             </div>
         </td>
     </tr>';
@@ -221,8 +223,18 @@ foreach ($records as $item) {
         ], 1)
         . '</div>';
 
+    $deleteBody = '<form action="ajax/delete_absensi_bulk.php" method="post" data-ajax-form class="space-y-5">'
+        . csrf_input()
+        . '<input type="hidden" name="ids" value="' . e((string) $item['id']) . '">'
+        . '<p class="text-sm text-slate-600">Hapus data absensi <strong>' . e($item['name']) . '</strong> pada tanggal <strong>' . e(format_date_id($item['tanggal'])) . '</strong> secara permanen?</p>'
+        . '<div class="flex justify-end gap-3">'
+        . ui_button('Batal', ['variant' => 'secondary', 'attrs' => ['data-close-modal' => $deleteModalId]])
+        . ui_button('Hapus Permanen', ['type' => 'submit', 'variant' => 'danger', 'icon' => 'trash'])
+        . '</div></form>';
+
     $modals .= ui_modal($viewModalId, 'Detail Absensi', $viewBody, ['max_width' => 'max-w-5xl']);
     $modals .= ui_modal($modalId, 'Edit Absensi', $renderAbsensiForm($employees, $statusOptions, $item, $modalId));
+    $modals .= ui_modal($deleteModalId, 'Hapus Absensi', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
 $createModalId = 'absensi-create';

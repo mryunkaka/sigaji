@@ -88,12 +88,16 @@ $rows = '';
 $modals = '';
 foreach ($latestPayroll as $item) {
     $viewModalId = 'dashboard-payroll-view-' . $item['id'];
+    $deleteModalId = 'dashboard-payroll-delete-' . $item['id'];
     $rows .= '<tr>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
         <td class="px-4 py-3">' . money($item['total_potongan']) . '</td>
-        <td class="px-4 py-3">' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '</td>
+        <td class="px-4 py-3"><div class="flex flex-nowrap items-center gap-2">'
+            . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]])
+            . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]])
+            . '</div></td>
     </tr>';
 
     $viewBody = '<div class="space-y-6">'
@@ -106,7 +110,18 @@ foreach ($latestPayroll as $item) {
         ], 3)
         . '</div>';
 
+    $deleteBody = '<form action="ajax/delete_penggajian_bulk.php" method="post" data-ajax-form class="space-y-5">'
+        . csrf_input()
+        . '<input type="hidden" name="ids" value="' . e((string) $item['id']) . '">'
+        . '<input type="hidden" name="reload_section" value="dashboard">'
+        . '<p class="text-sm text-slate-600">Hapus payroll <strong>' . e($item['name']) . '</strong> untuk periode <strong>' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</strong> secara permanen?</p>'
+        . '<div class="flex justify-end gap-3">'
+        . ui_button('Batal', ['variant' => 'secondary', 'attrs' => ['data-close-modal' => $deleteModalId]])
+        . ui_button('Hapus Permanen', ['type' => 'submit', 'variant' => 'danger', 'icon' => 'trash'])
+        . '</div></form>';
+
     $modals .= ui_modal($viewModalId, 'Detail Payroll Terbaru', $viewBody, ['max_width' => 'max-w-4xl']);
+    $modals .= ui_modal($deleteModalId, 'Hapus Payroll', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
 echo '<div class="grid gap-4 xl:grid-cols-4">'
@@ -119,7 +134,7 @@ echo '<div class="grid gap-4 xl:grid-cols-4">'
 echo '<div class="mt-6 space-y-6">'
     . ui_panel('Filter Dashboard', $filterForm, ['subtitle' => 'Default bulan sebelumnya. Pilih periode dashboard sesuai kebutuhan laporan.'])
     . ui_panel('Penggajian Terbaru', ui_table(
-        ['Karyawan', 'Periode', 'Gaji Bersih', 'Total Potongan', 'View'],
+        ['Karyawan', 'Periode', 'Gaji Bersih', 'Total Potongan', ['label' => 'Aksi', 'sortable' => false]],
         $rows !== '' ? $rows : '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Belum ada data penggajian.</td></tr>',
         ['numeric_columns' => [2, 3], 'storage_key' => 'dashboard-payroll-latest']
     ), ['subtitle' => 'Ringkasan 10 payroll terbaru pada periode ' . $rangeLabel]) .

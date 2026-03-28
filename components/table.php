@@ -28,12 +28,6 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
         $thead .= '<th class="whitespace-nowrap py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500' . $extraThClass . '">' . $headerContent . '</th>';
     }
 
-    $footerCells = '';
-    foreach ($headers as $index => $header) {
-        $extraTdClass = $index === 0 ? ' w-10 px-3' : ' px-4';
-        $footerCells .= '<td class="whitespace-nowrap py-3 text-sm font-semibold text-slate-600' . $extraTdClass . '" data-footer-cell="' . $index . '">'
-            . ($index === 0 ? 'Total tampil: 0 data' : '&nbsp;') . '</td>';
-    }
 
     $rowsPerPageOptions = '';
     $limitId = $tableId . '-limit';
@@ -102,10 +96,9 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
             </div>
         </div>
         <div class="max-w-full overflow-x-auto overflow-y-hidden">
-            <table class="min-w-full table-fixed divide-y divide-slate-200 [&_tbody_td]:max-w-[180px] [&_tbody_td]:overflow-hidden [&_tbody_td]:text-ellipsis [&_tbody_td]:whitespace-nowrap [&_tbody_td]:align-middle [&_thead_th]:whitespace-nowrap [&_tfoot_td]:whitespace-nowrap [&_tbody_td:first-child]:w-10 [&_tbody_td:first-child]:px-3 [&_tbody_td:first-child]:text-center [&_thead_th:first-child]:w-10 [&_thead_th:first-child]:px-3 [&_thead_th:first-child]:text-center [&_tfoot_td:first-child]:w-10 [&_tfoot_td:first-child]:px-3">
+            <table class="min-w-full w-max table-auto divide-y divide-slate-200 [&_tbody_td]:align-middle [&_tbody_td]:whitespace-nowrap [&_thead_th]:whitespace-nowrap [&_tbody_td:first-child]:w-10 [&_tbody_td:first-child]:px-3 [&_tbody_td:first-child]:text-center [&_thead_th:first-child]:w-10 [&_thead_th:first-child]:px-3 [&_thead_th:first-child]:text-center">
                 <thead class="bg-slate-50/85 backdrop-blur"><tr>' . $thead . '</tr></thead>
                 <tbody class="divide-y divide-slate-100 text-sm text-slate-700">' . $bodyHtml . '</tbody>
-                <tfoot class="border-t border-slate-200 bg-slate-50/80"><tr>' . $footerCells . '</tr></tfoot>
             </table>
         </div>
         <div class="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">

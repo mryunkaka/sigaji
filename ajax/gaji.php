@@ -158,20 +158,25 @@ foreach ($generatedPeriods as $period) {
     $periodOptions[$value] = $label;
 }
 
+$tableId = 'gaji-table';
+$bulkDeleteFormId = 'gaji-bulk-delete';
 $tableRows = '';
 $modals = '';
 foreach ($payrolls as $item) {
     $viewModalId = 'gaji-view-' . $item['id'];
+    $deleteModalId = 'gaji-delete-' . $item['id'];
     $tableRows .= '<tr>
+        <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
         <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
         <td class="px-4 py-3" data-sort-value="' . e($item['tanggal_awal_gaji']) . '">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_kotor']) . '</td>
         <td class="px-4 py-3">' . money($item['total_potongan']) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
         <td class="px-4 py-3">
-            <div class="flex flex-wrap gap-2">
+            <div class="flex flex-nowrap items-center gap-2">
                 ' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '
                 <a href="print_slip.php?id=' . e($item['id']) . '" target="_blank">' . ui_button('Slip', ['icon' => 'printer', 'variant' => 'secondary', 'icon_only' => true]) . '</a>
+                ' . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]]) . '
             </div>
         </td>
     </tr>';
@@ -200,7 +205,18 @@ foreach ($payrolls as $item) {
         ], 4)
         . '</div>';
 
+    $deleteBody = '<form action="ajax/delete_penggajian_bulk.php" method="post" data-ajax-form class="space-y-5">'
+        . csrf_input()
+        . '<input type="hidden" name="ids" value="' . e((string) $item['id']) . '">'
+        . '<input type="hidden" name="reload_section" value="gaji">'
+        . '<p class="text-sm text-slate-600">Hapus payroll <strong>' . e($item['name']) . '</strong> untuk periode <strong>' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</strong> secara permanen?</p>'
+        . '<div class="flex justify-end gap-3">'
+        . ui_button('Batal', ['variant' => 'secondary', 'attrs' => ['data-close-modal' => $deleteModalId]])
+        . ui_button('Hapus Permanen', ['type' => 'submit', 'variant' => 'danger', 'icon' => 'trash'])
+        . '</div></form>';
+
     $modals .= ui_modal($viewModalId, 'Detail Penggajian', $viewBody, ['max_width' => 'max-w-5xl']);
+    $modals .= ui_modal($deleteModalId, 'Hapus Penggajian', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
 $filterOptions = [
@@ -257,6 +273,12 @@ $reportForm = $generatedPeriods === []
     . '<div class="flex items-end">' . ui_button('Cetak Laporan', ['type' => 'submit', 'variant' => 'secondary', 'icon' => 'printer']) . '</div>'
     . '</form>';
 
+$bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_penggajian_bulk.php" method="post" data-ajax-form class="hidden">'
+    . csrf_input()
+    . '<input type="hidden" name="ids" value="">'
+    . '<input type="hidden" name="reload_section" value="gaji">'
+    . '</form>';
+
 $rangeLabel = format_date_id($startDate) . ' - ' . format_date_id($endDate);
 $generateRangeLabel = format_date_id($generateStartDate) . ' - ' . format_date_id($generateEndDate);
 
@@ -264,30 +286,49 @@ echo '<div class="space-y-6">';
 echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Pilih periode kerja yang ingin dicek untuk generate dan laporan.']);
 echo ui_panel('Generate Penggajian', $generateFilterForm . '<div class="mt-6">' . $generateInfo . '</div><div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Cek dan generate payroll untuk rentang ' . $generateRangeLabel . '. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate pada rentang ini.']);
 echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Hanya periode payroll yang sudah digenerate pada filter aktif yang bisa dicetak.']);
-echo ui_panel('Daftar Penggajian', ui_table(
-    ['Karyawan', 'Periode', 'Gaji Kotor', 'Total Potongan', 'Gaji Bersih', 'Cetak'],
-    $tableRows !== '' ? $tableRows : '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Belum ada payroll pada periode filter ini.</td></tr>',
-    [
-        'numeric_columns' => [2, 3, 4],
-        'storage_key' => 'gaji-daftar',
-        'server_pagination' => [
-            'section' => 'gaji',
-            'current_page' => $currentPage,
-            'total_pages' => $totalPages,
-            'total_items' => $totalPayrolls,
-            'page_param' => 'page',
-            'params' => [
-                'filter' => $filterPreset,
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'search' => $search,
-                'generate_filter' => $generateFilterPreset,
-                'generate_start_date' => $generateStartDate,
-                'generate_end_date' => $generateEndDate,
-            ],
-            'search' => $search,
+echo ui_panel('Daftar Penggajian', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
+    . '<div class="flex flex-wrap gap-3">'
+    . ui_button('Hapus Permanen', [
+        'icon' => 'trash',
+        'variant' => 'danger',
+        'attrs' => [
+            'data-bulk-delete' => '1',
+            'data-table-target' => $tableId,
+            'data-form-target' => $bulkDeleteFormId,
+            'data-bulk-item-label' => 'payroll',
+            'data-bulk-empty-message' => 'Pilih data payroll yang ingin dihapus.',
+            'data-bulk-confirm-message' => 'Hapus permanen {count} data payroll terpilih?',
         ],
-    ]
-), ['subtitle' => 'Payroll yang sudah digenerate pada periode filter ' . $rangeLabel]);
+    ])
+    . '</div>'
+    . '</div>'
+    . ui_table(
+        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Periode', 'Gaji Kotor', 'Total Potongan', 'Gaji Bersih', ['label' => 'Aksi', 'sortable' => false]],
+        $tableRows !== '' ? $tableRows : '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Belum ada payroll pada periode filter ini.</td></tr>',
+        [
+            'numeric_columns' => [3, 4, 5],
+            'storage_key' => 'gaji-daftar',
+            'table_id' => $tableId,
+            'server_pagination' => [
+                'section' => 'gaji',
+                'current_page' => $currentPage,
+                'total_pages' => $totalPages,
+                'total_items' => $totalPayrolls,
+                'page_param' => 'page',
+                'params' => [
+                    'filter' => $filterPreset,
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                    'search' => $search,
+                    'generate_filter' => $generateFilterPreset,
+                    'generate_start_date' => $generateStartDate,
+                    'generate_end_date' => $generateEndDate,
+                ],
+                'search' => $search,
+            ],
+        ]
+    ) . $bulkDeleteForm,
+    ['subtitle' => 'Payroll yang sudah digenerate pada periode filter ' . $rangeLabel]
+);
 echo '</div>';
 echo $modals;

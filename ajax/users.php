@@ -87,7 +87,7 @@ foreach ($users as $item) {
         <td class="px-4 py-3">' . e($item['jabatan'] ?: '-') . '</td>
         <td class="px-4 py-3">' . e(ucfirst($item['role'])) . '</td>
         <td class="px-4 py-3">' . e($item['tanggal_bergabung'] ? format_date_id($item['tanggal_bergabung']) : '-') . '</td>
-        <td class="px-4 py-3"><div class="flex flex-wrap gap-2">'
+        <td class="px-4 py-3"><div class="flex flex-nowrap items-center gap-2">'
             . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]])
             . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $editModalId]])
             . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]])
