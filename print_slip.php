@@ -58,28 +58,171 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
     <meta charset="UTF-8">
     <title>Slip Gaji - <?= e($item['nama_unit']) ?></title>
     <style>
-        @page { size: A4 landscape; margin: 10mm; }
+        :root {
+            --page-width: 281mm;
+            --page-height: 194mm;
+        }
+
+        @page { size: A4 landscape; margin: 8mm; }
+
+        * { box-sizing: border-box; }
         html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; margin: 0; background: #e5e7eb; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .print-actions { margin-bottom: 12px; }
-        .print-actions button { background: #0f172a; color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
-        .slip { border: 1px solid #111827; padding: 10px; background: #ffffff; }
-        .header-table, .info-table, .main-table, .summary-table, .detail-table, .notes-table { width: 100%; border-collapse: collapse; }
-        .header-table td, .info-table td { padding: 4px 6px; vertical-align: top; }
-        .main-table td, .main-table th, .summary-table td, .summary-table th, .detail-table td, .detail-table th, .notes-table td, .notes-table th { border: 1px solid #111827; padding: 5px 6px; vertical-align: top; }
-        .logo-box { width: 88px; text-align: center; }
-        .logo-box img { max-width: 74px; max-height: 74px; }
-        .company-name { font-size: 24px; font-weight: bold; text-align: center; }
-        .section-title { background: #dbeafe; font-weight: bold; text-transform: uppercase; }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            line-height: 1.2;
+            color: #111827;
+            margin: 0;
+            background: #e5e7eb;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .print-actions {
+            margin: 0 auto 12px;
+            width: var(--page-width);
+            padding-top: 12px;
+        }
+
+        .print-actions button {
+            background: #0f172a;
+            color: #fff;
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            cursor: pointer;
+        }
+
+        .page-shell {
+            display: flex;
+            justify-content: center;
+            padding: 0 0 16px;
+        }
+
+        .page-fit {
+            width: var(--page-width);
+            height: var(--page-height);
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+        }
+
+        .slip {
+            border: 1px solid #111827;
+            padding: 8px;
+            background: #ffffff;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slip-main {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .header-table,
+        .info-table,
+        .main-table,
+        .summary-table,
+        .detail-table,
+        .notes-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .header-table td,
+        .info-table td {
+            padding: 3px 5px;
+            vertical-align: top;
+        }
+
+        .main-table td,
+        .main-table th,
+        .summary-table td,
+        .summary-table th,
+        .detail-table td,
+        .detail-table th,
+        .notes-table td,
+        .notes-table th {
+            border: 1px solid #111827;
+            padding: 3px 5px;
+            vertical-align: top;
+            word-break: break-word;
+        }
+
+        .main-table > tbody > tr > td,
+        .summary-table > tbody > tr > td {
+            padding: 0 4px 0 0;
+            border: none;
+        }
+
+        .main-table > tbody > tr > td:last-child,
+        .summary-table > tbody > tr > td:last-child {
+            padding-right: 0;
+        }
+
+        .logo-box { width: 74px; text-align: center; }
+        .logo-box img { max-width: 58px; max-height: 58px; }
+        .company-name {
+            font-size: 20px;
+            line-height: 1.05;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .section-title {
+            background: #dbeafe;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
         .right { text-align: right; }
         .center { text-align: center; }
         .total-row { font-weight: bold; background: #ecfccb; }
-        .signature { margin-top: 18px; width: 100%; }
-        .signature td { border: none; padding-top: 20px; }
-        .small { font-size: 10px; color: #4b5563; }
+        .notes-table { font-size: 9px; }
+        .notes-table td, .notes-table th { padding: 2px 4px; }
+        .summary-total {
+            padding: 10px;
+            background: #ecfccb;
+            border: 1px solid #65a30d;
+        }
+        .summary-total-value {
+            font-size: 18px;
+            line-height: 1.05;
+            font-weight: bold;
+        }
+        .signature {
+            margin-top: auto;
+            width: 100%;
+        }
+        .signature td {
+            border: none;
+            padding-top: 10px;
+        }
+        .small { font-size: 9px; line-height: 1.15; color: #4b5563; }
+
         @media print {
             .print-actions { display: none; }
             body { margin: 0; background: #ffffff; }
+            .page-shell { padding: 0; }
+            .page-fit {
+                box-shadow: none;
+            }
+            .slip,
+            .page-fit,
+            .main-table,
+            .summary-table,
+            .detail-table,
+            .notes-table,
+            .signature {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
         }
     </style>
 </head>
@@ -88,7 +231,10 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
         <button onclick="window.print()">Print Slip</button>
     </div>
 
-    <div class="slip">
+    <div class="page-shell">
+    <div id="slip-fit" class="page-fit">
+    <div id="slip-content" class="slip">
+        <div class="slip-main">
         <table class="header-table">
             <tr>
                 <td class="logo-box" rowspan="3">
@@ -243,14 +389,15 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
                     </table>
                 </td>
                 <td width="66.66%" style="padding-left: 10px;">
-                    <div style="padding: 14px 12px; background:#ecfccb; border:1px solid #65a30d;">
-                        <div style="font-size: 22px; font-weight: bold;">Total diterima: <?= money($item['gaji_bersih']) ?></div>
+                    <div class="summary-total">
+                        <div class="summary-total-value">Total diterima: <?= money($item['gaji_bersih']) ?></div>
                         <div class="small" style="margin-top: 6px;"><em>Terbilang: <?= e($gajiBersihText) ?></em></div>
                         <div class="small" style="margin-top: 8px;"><?= e($item['alamat'] ?: '-') ?></div>
                     </div>
                 </td>
             </tr>
         </table>
+        </div>
 
         <table class="signature">
             <tr>
@@ -262,5 +409,67 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
             </tr>
         </table>
     </div>
+    </div>
+    </div>
+
+    <script>
+        (() => {
+            const fitArea = document.getElementById('slip-fit');
+            const slip = document.getElementById('slip-content');
+
+            if (!fitArea || !slip) {
+                return;
+            }
+
+            const supportsZoom = 'zoom' in slip.style;
+
+            const resetScale = () => {
+                if (supportsZoom) {
+                    slip.style.zoom = '1';
+                } else {
+                    slip.style.transform = 'none';
+                    slip.style.transformOrigin = 'top left';
+                    slip.style.width = '100%';
+                }
+            };
+
+            const applyScale = (scale) => {
+                const nextScale = Math.max(0.5, Math.min(1, scale));
+
+                if (supportsZoom) {
+                    slip.style.zoom = nextScale.toFixed(3);
+                    return;
+                }
+
+                slip.style.transform = `scale(${nextScale.toFixed(3)})`;
+                slip.style.transformOrigin = 'top left';
+                slip.style.width = `${(100 / nextScale).toFixed(3)}%`;
+            };
+
+            const fitSlipToSinglePage = () => {
+                resetScale();
+
+                window.requestAnimationFrame(() => {
+                    const availableWidth = fitArea.clientWidth;
+                    const availableHeight = fitArea.clientHeight;
+                    const naturalWidth = slip.scrollWidth;
+                    const naturalHeight = slip.scrollHeight;
+
+                    if (!availableWidth || !availableHeight || !naturalWidth || !naturalHeight) {
+                        return;
+                    }
+
+                    const scale = Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight);
+                    applyScale(scale);
+                });
+            };
+
+            document.addEventListener('DOMContentLoaded', fitSlipToSinglePage);
+            window.addEventListener('load', fitSlipToSinglePage);
+            window.addEventListener('resize', fitSlipToSinglePage);
+            window.addEventListener('beforeprint', fitSlipToSinglePage);
+            window.setTimeout(fitSlipToSinglePage, 60);
+        })();
+    </script>
 </body>
 </html>

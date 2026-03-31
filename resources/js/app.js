@@ -1,8 +1,11 @@
 (() => {
   const STORAGE_KEY = 'sigaji.active.section';
   const PARAMS_KEY = 'sigaji.section.params';
+  const PARAMS_MIGRATION_KEY = 'sigaji.section.params.migration';
+  const PARAMS_MIGRATION_VERSION = 'closing-period-26-25-v1';
   const TABLE_STATE_KEY = 'sigaji.table.state';
   const SIDEBAR_KEY = 'sigaji.sidebar.open';
+  const CLOSING_PERIOD_SECTIONS = ['dashboard', 'absensi', 'gaji'];
   let currentSection = localStorage.getItem(STORAGE_KEY) || window.location.hash.replace('#', '') || 'dashboard';
   let sectionParams = {};
   let tableStates = {};
@@ -18,6 +21,24 @@
     tableStates = JSON.parse(localStorage.getItem(TABLE_STATE_KEY) || '{}') || {};
   } catch (error) {
     tableStates = {};
+  }
+
+  if (localStorage.getItem(PARAMS_MIGRATION_KEY) !== PARAMS_MIGRATION_VERSION) {
+    CLOSING_PERIOD_SECTIONS.forEach((section) => {
+      if (!sectionParams[section] || typeof sectionParams[section] !== 'object') {
+        return;
+      }
+
+      delete sectionParams[section].start_date;
+      delete sectionParams[section].end_date;
+
+      if (Object.keys(sectionParams[section]).length === 0) {
+        delete sectionParams[section];
+      }
+    });
+
+    localStorage.setItem(PARAMS_KEY, JSON.stringify(sectionParams));
+    localStorage.setItem(PARAMS_MIGRATION_KEY, PARAMS_MIGRATION_VERSION);
   }
 
   const anyModalOpen = () => document.querySelector('[data-modal].is-open') !== null;
@@ -323,6 +344,7 @@
 
     const allRows = Array.from(tbody.querySelectorAll('tr')).filter((row) => row.children.length > 1);
     const searchInput = wrapper.querySelector('[data-table-search]');
+    const searchForm = wrapper.querySelector('[data-table-search-form]');
     const limitSelect = wrapper.querySelector('[data-table-limit]');
     const prevButton = wrapper.querySelector('[data-table-prev]');
     const nextButton = wrapper.querySelector('[data-table-next]');
@@ -496,13 +518,20 @@
     };
 
     if (serverSection) {
-      let searchTimer = null;
-      searchInput?.addEventListener('input', () => {
-        window.clearTimeout(searchTimer);
-        searchTimer = window.setTimeout(() => {
-          const nextParams = { ...serverParams, search: searchInput.value || '', page: 1, master_page: 1, payroll_page: 1 };
-          loadSection(serverSection, nextParams);
-        }, 300);
+      const triggerServerSearch = () => {
+        const nextParams = { ...serverParams, search: searchInput?.value || '', page: 1, master_page: 1, payroll_page: 1 };
+        loadSection(serverSection, nextParams);
+      };
+
+      searchForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        triggerServerSearch();
+      });
+
+      searchInput?.addEventListener('search', () => {
+        if ((searchInput.value || '') === '') {
+          triggerServerSearch();
+        }
       });
 
       selectAllCheckbox?.addEventListener('change', () => {

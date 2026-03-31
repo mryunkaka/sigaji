@@ -2,19 +2,9 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
-
-$pageSize = 25;
-$currentPage = max(1, (int) request_value('page', 1));
-$search = trim((string) request_value('search', ''));
-$searchSql = '';
 $searchCondition = '';
-$searchParams = [];
-if ($search !== '') {
-    $searchSql = ' WHERE un.nama_unit LIKE :search ';
-    $searchCondition = ' AND un.nama_unit LIKE :search ';
-    $searchParams['search'] = '%' . $search . '%';
-}
-$totalUnits = (int) (fetch_one('SELECT COUNT(*) AS total FROM units un' . $searchSql, $searchParams)['total'] ?? 0);
+
+$totalUnits = (int) (fetch_one('SELECT COUNT(*) AS total FROM units un')['total'] ?? 0);
 $totalSelectableUnits = (int) (fetch_one(
     'SELECT COUNT(*) AS total
      FROM (
@@ -25,19 +15,14 @@ $totalSelectableUnits = (int) (fetch_one(
         GROUP BY un.id
         HAVING COUNT(usr.id) = 0
      ) selectable_units',
-    ['active_unit_id' => $authUser['unit_id']] + $searchParams
+    ['active_unit_id' => $authUser['unit_id']]
 )['total'] ?? 0);
-$totalPages = max(1, (int) ceil($totalUnits / $pageSize));
-$currentPage = min($currentPage, $totalPages);
-$offset = ($currentPage - 1) * $pageSize;
 
 $units = fetch_all(
     'SELECT un.*,
             (SELECT COUNT(*) FROM users usr WHERE usr.unit_id = un.id) AS total_users
-     FROM units un' . $searchSql . '
-     ORDER BY un.nama_unit
-     LIMIT ' . $pageSize . ' OFFSET ' . $offset,
-    $searchParams
+     FROM units un
+     ORDER BY un.nama_unit'
 );
 
 $renderUnitForm = static function (array $item, string $modalId, bool $isCreate = false): string {
@@ -133,17 +118,8 @@ echo ui_panel('Data Unit', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:
                 'confirm_message' => 'Hapus permanen {count} unit terpilih?',
             ],
             'storage_key' => 'units-list',
-            'search_column' => 1,
+            'search_column' => 2,
             'table_id' => $tableId,
-            'server_pagination' => [
-                'section' => 'units',
-                'current_page' => $currentPage,
-                'total_pages' => $totalPages,
-                'total_items' => $totalUnits,
-                'page_param' => 'page',
-                'params' => ['search' => $search],
-                'search' => $search,
-            ],
         ]
     ) . $bulkDeleteForm,
     ['subtitle' => 'Mirror halaman unit lama untuk kelola nama, alamat, nomor HP, dan logo unit.']

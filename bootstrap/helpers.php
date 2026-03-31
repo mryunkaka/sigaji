@@ -93,6 +93,29 @@ function format_date_id(?string $value, bool $withTime = false, bool $withDayNam
     return $dateText;
 }
 
+function closing_period_range(?DateTimeInterface $reference = null): array
+{
+    $base = $reference;
+    if (!$base instanceof DateTimeInterface) {
+        $base = new DateTimeImmutable('today');
+    } elseif (!$base instanceof DateTimeImmutable) {
+        $base = DateTimeImmutable::createFromInterface($base);
+    }
+
+    $previousMonth = $base->modify('first day of last month');
+    $start = $previousMonth->setDate(
+        (int) $previousMonth->format('Y'),
+        (int) $previousMonth->format('m'),
+        26
+    );
+    $end = $base->setDate((int) $base->format('Y'), (int) $base->format('m'), 25);
+
+    return [
+        'start' => $start->format('Y-m-d'),
+        'end' => $end->format('Y-m-d'),
+    ];
+}
+
 function terbilang_id(int $value): string
 {
     $value = abs($value);

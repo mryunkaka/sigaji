@@ -116,6 +116,25 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
         </div>';
     }
 
+    $searchControl = '<div class="relative block w-full sm:max-w-xs">
+                <label for="' . e($searchId) . '" class="sr-only">Cari nama</label>
+                <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">' . ui_icon('magnifying-glass', 'h-4 w-4') . '</span>
+                <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="Cari nama..." data-table-search>
+            </div>';
+
+    if ($serverPagination !== null) {
+        $searchControl = '<form class="flex w-full gap-2 sm:max-w-md" data-table-search-form>
+                <div class="relative min-w-0 flex-1">
+                    <label for="' . e($searchId) . '" class="sr-only">Cari nama</label>
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">' . ui_icon('magnifying-glass', 'h-4 w-4') . '</span>
+                    <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="Cari nama..." data-table-search>
+                </div>
+                <button type="submit" class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-100">
+                    Cari
+                </button>
+            </form>';
+    }
+
     return '
     <div id="' . e($tableId) . '" class="data-table relative max-w-full overflow-hidden rounded-[30px] border border-slate-200/80 bg-white/95 shadow-[0_18px_48px_rgba(15,23,42,.06)]"
         data-search-column="' . $searchColumn . '"
@@ -129,11 +148,7 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
         </div>
         <div class="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             ' . $topControls . '
-            <div class="relative block w-full sm:max-w-xs">
-                <label for="' . e($searchId) . '" class="sr-only">Cari nama</label>
-                <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">' . ui_icon('magnifying-glass', 'h-4 w-4') . '</span>
-                <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="Cari nama..." data-table-search>
-            </div>
+            ' . $searchControl . '
         </div>
         ' . $bulkToolbar . '
         <div class="max-w-full overflow-x-auto overflow-y-hidden">

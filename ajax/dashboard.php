@@ -3,44 +3,13 @@
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 
-$filterPreset = (string) request_value('filter', 'previous_month');
-$today = new DateTimeImmutable('today');
-
-$resolveRange = static function (string $preset) use ($today): array {
-    return match ($preset) {
-        'current_month' => [
-            'start' => $today->modify('first day of this month')->format('Y-m-d'),
-            'end' => $today->modify('last day of this month')->format('Y-m-d'),
-        ],
-        'one_month_ago' => [
-            'start' => $today->modify('first day of -2 month')->format('Y-m-d'),
-            'end' => $today->modify('last day of -2 month')->format('Y-m-d'),
-        ],
-        'two_months_ago' => [
-            'start' => $today->modify('first day of -3 month')->format('Y-m-d'),
-            'end' => $today->modify('last day of -3 month')->format('Y-m-d'),
-        ],
-        default => [
-            'start' => $today->modify('first day of last month')->format('Y-m-d'),
-            'end' => $today->modify('last day of last month')->format('Y-m-d'),
-        ],
-    };
-};
-
-$defaultRange = $resolveRange($filterPreset);
+$defaultRange = closing_period_range();
 $startDate = (string) request_value('start_date', $defaultRange['start']);
 $endDate = (string) request_value('end_date', $defaultRange['end']);
 
-if ($filterPreset !== 'custom') {
+if (!$startDate || !$endDate || strtotime($startDate) === false || strtotime($endDate) === false) {
     $startDate = $defaultRange['start'];
     $endDate = $defaultRange['end'];
-}
-
-if (!$startDate || !$endDate || strtotime($startDate) === false || strtotime($endDate) === false) {
-    $fallback = $resolveRange('previous_month');
-    $filterPreset = 'previous_month';
-    $startDate = $fallback['start'];
-    $endDate = $fallback['end'];
 }
 
 if ($startDate > $endDate) {
@@ -67,16 +36,7 @@ $latestPayroll = fetch_all(
     ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate]
 );
 
-$filterOptions = [
-    'current_month' => 'Bulan ini',
-    'previous_month' => 'Bulan sebelumnya',
-    'one_month_ago' => '1 bulan yang lalu',
-    'two_months_ago' => '2 bulan yang lalu',
-    'custom' => 'Custom filter tanggal',
-];
-
-$filterForm = '<form class="grid gap-4 lg:grid-cols-[220px_1fr_1fr_auto]" data-section-filter data-section="dashboard">'
-    . ui_select('filter', 'Periode Dashboard', $filterOptions, $filterPreset)
+$filterForm = '<form class="grid gap-4 lg:grid-cols-[1fr_1fr_auto]" data-section-filter data-section="dashboard">'
     . ui_input('start_date', 'Tanggal Awal', $startDate, 'date')
     . ui_input('end_date', 'Tanggal Akhir', $endDate, 'date')
     . '<div class="flex items-end">' . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary']) . '</div>'
@@ -132,7 +92,7 @@ echo '<div class="grid gap-4 xl:grid-cols-4">'
     . '</div>';
 
 echo '<div class="mt-6 space-y-6">'
-    . ui_panel('Filter Dashboard', $filterForm, ['subtitle' => 'Default bulan sebelumnya. Pilih periode dashboard sesuai kebutuhan laporan.'])
+    . ui_panel('Filter Dashboard', $filterForm, ['subtitle' => 'Default periode closing aktif: ' . $rangeLabel . '. Pilih periode dashboard sesuai kebutuhan laporan.'])
     . ui_panel('Penggajian Terbaru', ui_table(
         ['Karyawan', 'Periode', 'Gaji Bersih', 'Total Potongan', ['label' => 'Aksi', 'sortable' => false]],
         $rows !== '' ? $rows : '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Belum ada data penggajian.</td></tr>',

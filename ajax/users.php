@@ -3,39 +3,26 @@
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
 
-$pageSize = 25;
-$currentPage = max(1, (int) request_value('page', 1));
-$search = trim((string) request_value('search', ''));
-$searchSql = '';
-$searchParams = [];
-if ($search !== '') {
-    $searchSql = ' AND name LIKE :search ';
-    $searchParams['search'] = '%' . $search . '%';
-}
 $totalUsers = (int) (fetch_one(
     'SELECT COUNT(*) AS total
      FROM users
-     WHERE unit_id = :unit_id' . $searchSql,
-    ['unit_id' => $authUser['unit_id']] + $searchParams
+     WHERE unit_id = :unit_id',
+    ['unit_id' => $authUser['unit_id']]
 )['total'] ?? 0);
 $totalSelectableUsers = (int) (fetch_one(
     'SELECT COUNT(*) AS total
      FROM users
      WHERE unit_id = :unit_id
-       AND id != :auth_id' . $searchSql,
-    ['unit_id' => $authUser['unit_id'], 'auth_id' => $authUser['id']] + $searchParams
+       AND id != :auth_id',
+    ['unit_id' => $authUser['unit_id'], 'auth_id' => $authUser['id']]
 )['total'] ?? 0);
-$totalPages = max(1, (int) ceil($totalUsers / $pageSize));
-$currentPage = min($currentPage, $totalPages);
-$offset = ($currentPage - 1) * $pageSize;
 
 $users = fetch_all(
     'SELECT *
      FROM users
-     WHERE unit_id = :unit_id' . $searchSql . '
-     ORDER BY name
-     LIMIT ' . $pageSize . ' OFFSET ' . $offset,
-    ['unit_id' => $authUser['unit_id']] + $searchParams
+     WHERE unit_id = :unit_id
+     ORDER BY name',
+    ['unit_id' => $authUser['unit_id']]
 );
 
 $renderUserForm = static function (array $item, string $modalId, int $unitId, bool $isCreate = false): string {
@@ -164,15 +151,6 @@ echo ui_panel('Data User', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:
             'storage_key' => 'users-list',
             'search_column' => 2,
             'table_id' => $tableId,
-            'server_pagination' => [
-                'section' => 'users',
-                'current_page' => $currentPage,
-                'total_pages' => $totalPages,
-                'total_items' => $totalUsers,
-                'page_param' => 'page',
-                'params' => ['search' => $search],
-                'search' => $search,
-            ],
         ]
     ) . $bulkDeleteForm,
     ['subtitle' => 'Mirror halaman user lama dengan scope per unit aktif.']
