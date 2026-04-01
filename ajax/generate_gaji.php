@@ -11,7 +11,7 @@ if ($month < 1 || $month > 12 || $year < 2000) {
     json_response(['success' => false, 'message' => 'Bulan dan tahun periode wajib diisi.'], 422);
 }
 
-$period = closing_period_range_from_month_year($month, $year);
+$period = closing_period_range_from_month_year($month, $year, (int) $user['unit_id']);
 $tanggalAwal = $period['start'];
 $tanggalAkhir = $period['end'];
 

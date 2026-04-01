@@ -4,8 +4,9 @@ require __DIR__ . '/bootstrap/app.php';
 $user = Auth::require();
 
 $id = (int) request_value('id');
+$autoDownload = (string) request_value('download', '') === '1';
 $item = fetch_one(
-    'SELECT p.*, u.name, u.jabatan, u.nik, u.npwp, u.no_hp, u.alamat, u.tanggal_bergabung, un.nama_unit, un.alamat_unit, un.no_hp_unit, un.logo_unit
+    'SELECT p.*, u.name, u.kode_absensi, u.jabatan, u.nik, u.npwp, u.no_hp, u.alamat, u.tanggal_bergabung, un.nama_unit, un.alamat_unit, un.no_hp_unit, un.logo_unit
      FROM penggajian p
      JOIN users u ON u.id = p.user_id
      JOIN units un ON un.id = u.unit_id
@@ -51,16 +52,101 @@ $owner = fetch_one(
 $slipNumber = 'SLIP/' . $item['id'] . '/' . date('m', strtotime($item['tanggal_awal_gaji'])) . '/' . date('Y', strtotime($item['tanggal_awal_gaji']));
 $gajiBersihText = ucwords(trim(terbilang_id((int) $item['gaji_bersih']))) . ' rupiah';
 $logoPath = public_asset_path($item['logo_unit'] ?? null);
+
+$formatShortPeriod = static function (?string $value): string {
+    if (!$value) {
+        return '-';
+    }
+
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return (string) $value;
+    }
+
+    $months = [
+        1 => 'Jan',
+        2 => 'Feb',
+        3 => 'Mar',
+        4 => 'Apr',
+        5 => 'Mei',
+        6 => 'Jun',
+        7 => 'Jul',
+        8 => 'Agu',
+        9 => 'Sep',
+        10 => 'Okt',
+        11 => 'Nov',
+        12 => 'Des',
+    ];
+
+    return date('j', $timestamp) . ' ' . ($months[(int) date('n', $timestamp)] ?? date('M', $timestamp));
+};
+
+$formatUpperPeriod = static function (?string $value): string {
+    if (!$value) {
+        return '-';
+    }
+
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        return strtoupper((string) $value);
+    }
+
+    $months = [
+        1 => 'JAN',
+        2 => 'FEB',
+        3 => 'MAR',
+        4 => 'APR',
+        5 => 'MEI',
+        6 => 'JUN',
+        7 => 'JUL',
+        8 => 'AGU',
+        9 => 'SEP',
+        10 => 'OKT',
+        11 => 'NOV',
+        12 => 'DES',
+    ];
+
+    return date('j', $timestamp) . ' ' . ($months[(int) date('n', $timestamp)] ?? strtoupper(date('M', $timestamp)));
+};
+
+$sanitizeFilenamePart = static function (?string $value, bool $replaceSpacesWithUnderscore = false): string {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return '';
+    }
+
+    $value = strtoupper($value);
+    $value = preg_replace('/[\\\\\\/:*?"<>|]+/', '-', $value) ?? $value;
+    $value = preg_replace('/\s+/', $replaceSpacesWithUnderscore ? '_' : ' ', $value) ?? $value;
+    $value = trim($value, " .-_");
+
+    return $value;
+};
+
+$periodLabel = $formatShortPeriod($item['tanggal_awal_gaji']) . ' - ' . $formatShortPeriod($item['tanggal_akhir_gaji']) . ' ' . date('Y', strtotime($item['tanggal_akhir_gaji']));
+$periodLabelUpper = $formatUpperPeriod($item['tanggal_awal_gaji']) . ' - ' . $formatUpperPeriod($item['tanggal_akhir_gaji']) . ' ' . date('Y', strtotime($item['tanggal_akhir_gaji']));
+$pdfFilenameParts = array_values(array_filter([
+    'SLIP_GAJI',
+    $sanitizeFilenamePart((string) ($item['kode_absensi'] ?? ''), true),
+    $sanitizeFilenamePart((string) ($item['name'] ?? ''), true),
+    $sanitizeFilenamePart($periodLabelUpper),
+    $sanitizeFilenamePart((string) ($item['nama_unit'] ?? ''), true),
+], static fn ($part) => $part !== ''));
+$pdfBaseFilename = implode('-', $pdfFilenameParts);
+$pdfFilename = $pdfBaseFilename . '.pdf';
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Slip Gaji - <?= e($item['nama_unit']) ?></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= e($pdfFilename) ?></title>
     <style>
         :root {
-            --page-width: 281mm;
-            --page-height: 194mm;
+            --page-width: 297mm;
+            --page-height: 210mm;
+            --content-width: 281mm;
+            --content-height: 194mm;
         }
 
         @page { size: A4 landscape; margin: 8mm; }
@@ -80,8 +166,18 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
 
         .print-actions {
             margin: 0 auto 12px;
-            width: var(--page-width);
+            width: var(--content-width);
             padding-top: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .print-actions-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .print-actions button {
@@ -93,24 +189,47 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
             cursor: pointer;
         }
 
+        .print-actions p {
+            margin: 0;
+            color: #475569;
+            font-size: 13px;
+        }
+
         .page-shell {
             display: flex;
+            align-items: center;
             justify-content: center;
+            min-height: calc(100vh - 88px);
             padding: 0 0 16px;
         }
 
         .page-fit {
             width: var(--page-width);
             height: var(--page-height);
-            overflow: hidden;
             background: #ffffff;
             box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .page-fit.exporting {
+            box-shadow: none;
+        }
+
+        .sheet-frame {
+            width: var(--content-width);
+            height: var(--content-height);
+            overflow: hidden;
+            background: #ffffff;
+            display: flex;
         }
 
         .slip {
             border: 1px solid #111827;
             padding: 8px;
             background: #ffffff;
+            width: 100%;
             min-height: 100%;
             display: flex;
             flex-direction: column;
@@ -214,6 +333,7 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
                 box-shadow: none;
             }
             .slip,
+            .sheet-frame,
             .page-fit,
             .main-table,
             .summary-table,
@@ -228,11 +348,15 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
 </head>
 <body>
     <div class="print-actions">
-        <button onclick="window.print()">Print Slip</button>
+        <p id="download-status"><?= e($autoDownload ? 'Menyiapkan unduhan PDF...' : 'Halaman print siap dipakai. Klik Print Slip atau Download PDF sesuai kebutuhan.') ?></p>
+        <div class="print-actions-group">
+            <button type="button" id="download-slip">Download PDF</button>
+        </div>
     </div>
 
     <div class="page-shell">
     <div id="slip-fit" class="page-fit">
+    <div class="sheet-frame">
     <div id="slip-content" class="slip">
         <div class="slip-main">
         <table class="header-table">
@@ -411,11 +535,19 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
     </div>
     </div>
     </div>
+    </div>
 
+    <script src="<?= e(asset_url('assets/vendor/html2pdf.bundle.min.js')) ?>"></script>
     <script>
         (() => {
             const fitArea = document.getElementById('slip-fit');
             const slip = document.getElementById('slip-content');
+            const downloadButton = document.getElementById('download-slip');
+            const downloadStatus = document.getElementById('download-status');
+            const pdfBaseFilename = <?= json_encode($pdfBaseFilename, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            const pdfFilename = <?= json_encode($pdfFilename, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+            const autoDownload = <?= $autoDownload ? 'true' : 'false' ?>;
+            let isDownloading = false;
 
             if (!fitArea || !slip) {
                 return;
@@ -469,6 +601,89 @@ $logoPath = public_asset_path($item['logo_unit'] ?? null);
             window.addEventListener('resize', fitSlipToSinglePage);
             window.addEventListener('beforeprint', fitSlipToSinglePage);
             window.setTimeout(fitSlipToSinglePage, 60);
+
+            const setDownloadState = (loading, message) => {
+                isDownloading = loading;
+
+                if (downloadButton) {
+                    downloadButton.disabled = loading;
+                    downloadButton.textContent = loading ? 'Membuat PDF...' : 'Download PDF';
+                }
+
+                if (downloadStatus) {
+                    downloadStatus.textContent = message;
+                }
+            };
+
+            const resolveDownloadFilename = () => {
+                const storageKey = `slip-pdf-download-count:${pdfBaseFilename}`;
+
+                try {
+                    const currentCount = Number.parseInt(window.localStorage.getItem(storageKey) || '0', 10);
+                    const nextCount = Number.isFinite(currentCount) && currentCount > 0 ? currentCount + 1 : 1;
+                    window.localStorage.setItem(storageKey, String(nextCount));
+
+                    if (nextCount <= 1) {
+                        return pdfFilename;
+                    }
+
+                    return `${pdfBaseFilename}-PDF_COPY_${nextCount}.pdf`;
+                } catch (error) {
+                    console.warn('Local storage unavailable, fallback to base PDF filename.', error);
+                    return pdfFilename;
+                }
+            };
+
+            const downloadPdf = async () => {
+                if (isDownloading || typeof window.html2pdf === 'undefined') {
+                    if (typeof window.html2pdf === 'undefined' && downloadStatus) {
+                        downloadStatus.textContent = 'Library PDF gagal dimuat. Muat ulang halaman lalu coba lagi.';
+                    }
+                    return;
+                }
+
+                setDownloadState(true, 'Membuat file PDF dan memulai unduhan...');
+                fitSlipToSinglePage();
+
+                try {
+                    await new Promise((resolve) => window.setTimeout(resolve, 250));
+                    const nextFilename = resolveDownloadFilename();
+                    fitArea.classList.add('exporting');
+                    await window.html2pdf().set({
+                        filename: nextFilename,
+                        margin: 0,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: {
+                            scale: 2,
+                            useCORS: true,
+                            backgroundColor: '#ffffff',
+                        },
+                        jsPDF: {
+                            unit: 'mm',
+                            format: 'a4',
+                            orientation: 'landscape',
+                        },
+                        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+                    }).from(fitArea).save();
+
+                    setDownloadState(false, 'PDF berhasil diunduh. Jika browser memblokir unduhan, klik tombol Download PDF.');
+                } catch (error) {
+                    console.error(error);
+                    setDownloadState(false, 'Gagal membuat PDF. Klik tombol Download PDF untuk mencoba lagi.');
+                } finally {
+                    fitArea.classList.remove('exporting');
+                }
+            };
+
+            if (downloadButton) {
+                downloadButton.addEventListener('click', downloadPdf);
+            }
+
+            if (autoDownload) {
+                window.addEventListener('load', () => {
+                    window.setTimeout(downloadPdf, 400);
+                }, { once: true });
+            }
         })();
     </script>
 </body>

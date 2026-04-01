@@ -207,6 +207,8 @@ foreach ($payrolls as $item) {
     $viewModalId = 'gaji-view-' . $item['id'];
     $editModalId = 'gaji-edit-' . $item['id'];
     $deleteModalId = 'gaji-delete-' . $item['id'];
+    $downloadUrl = 'print_slip.php?id=' . e($item['id']) . '&download=1';
+    $downloadAction = "(function(url){var frame=document.getElementById('payroll-pdf-download-frame');if(!frame){frame=document.createElement('iframe');frame.id='payroll-pdf-download-frame';frame.setAttribute('aria-hidden','true');frame.style.position='fixed';frame.style.right='0';frame.style.bottom='0';frame.style.width='1px';frame.style.height='1px';frame.style.border='0';frame.style.opacity='0';document.body.appendChild(frame);}frame.src=url + (url.indexOf('?')===-1?'?':'&') + '_dl=' + Date.now();})('" . $downloadUrl . "');";
     $tableRows .= '<tr>
         <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
         <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '">' . e($item['name']) . '</td>
@@ -218,7 +220,8 @@ foreach ($payrolls as $item) {
             <div class="flex flex-nowrap items-center gap-2">
                 ' . ui_button('View', ['icon' => 'eye', 'variant' => 'info', 'icon_only' => true, 'attrs' => ['data-open-modal' => $viewModalId]]) . '
                 ' . ui_button('Edit', ['icon' => 'pencil', 'variant' => 'amber', 'icon_only' => true, 'attrs' => ['data-open-modal' => $editModalId]]) . '
-                <a href="print_slip.php?id=' . e($item['id']) . '" target="_blank">' . ui_button('Slip', ['icon' => 'printer', 'variant' => 'secondary', 'icon_only' => true]) . '</a>
+                ' . ui_button('Download PDF', ['icon' => 'document-arrow-down', 'variant' => 'secondary', 'icon_only' => true, 'attrs' => ['onclick' => $downloadAction]]) . '
+                <a href="print_slip.php?id=' . e($item['id']) . '" target="_blank" rel="noopener">' . ui_button('Print Slip', ['icon' => 'printer', 'variant' => 'secondary', 'icon_only' => true]) . '</a>
                 ' . ui_button('Hapus', ['icon' => 'trash', 'variant' => 'danger', 'icon_only' => true, 'attrs' => ['data-open-modal' => $deleteModalId]]) . '
             </div>
         </td>
