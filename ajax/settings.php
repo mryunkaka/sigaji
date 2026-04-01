@@ -2,6 +2,7 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
+ActivityLogService::logCurrentUser('open_section', 'Membuka halaman Setting.', ['section' => 'settings'], 'section', 'settings');
 
 $migrationMissing = false;
 

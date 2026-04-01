@@ -2,6 +2,7 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
+ActivityLogService::logCurrentUser('open_section', 'Membuka halaman Gaji.', ['section' => 'gaji'], 'section', 'gaji');
 
 $period = closing_period_filter_state();
 $selectedMonth = $period['selected_month'];

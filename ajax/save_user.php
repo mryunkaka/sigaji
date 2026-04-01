@@ -109,6 +109,18 @@ if ($id > 0) {
     }
     $payload['id'] = $id;
     execute_query('UPDATE users SET ' . implode(', ', $sets) . ' WHERE id = :id', $payload);
+    ActivityLogService::logCurrentUser(
+        'update_user',
+        'Memperbarui data user.',
+        [
+            'user_id' => $id,
+            'name' => $payload['name'],
+            'kode_absensi' => $payload['kode_absensi'],
+            'jabatan' => $payload['jabatan'],
+        ],
+        'user',
+        $id
+    );
 
     json_response([
         'success' => true,
@@ -130,6 +142,18 @@ $placeholders = ':' . implode(', :', array_keys($payload));
 execute_query('INSERT INTO users (' . $columns . ') VALUES (' . $placeholders . ')', $payload);
 $newId = (int) db()->lastInsertId();
 PayrollService::ensureMasterGaji($newId);
+ActivityLogService::logCurrentUser(
+    'create_user',
+    'Menambahkan user baru.',
+    [
+        'user_id' => $newId,
+        'name' => $payload['name'],
+        'kode_absensi' => $payload['kode_absensi'],
+        'jabatan' => $payload['jabatan'],
+    ],
+    'user',
+    $newId
+);
 
 json_response([
     'success' => true,

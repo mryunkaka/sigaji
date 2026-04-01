@@ -16,6 +16,16 @@ if ((int) $record['id'] === (int) $authUser['id']) {
 }
 
 execute_query('DELETE FROM users WHERE id = :id', ['id' => $id]);
+ActivityLogService::logCurrentUser(
+    'delete_user',
+    'Menghapus user.',
+    [
+        'user_id' => $id,
+        'name' => $record['name'] ?? '',
+    ],
+    'user',
+    $id
+);
 
 json_response([
     'success' => true,

@@ -67,6 +67,19 @@ try {
         @unlink($temporaryPath);
         @unlink($metaPath);
     }
+    ActivityLogService::logCurrentUser(
+        'upload_absensi',
+        'Import absensi berhasil diproses.',
+        [
+            'file_name' => $originalName,
+            'imported' => $summary['imported'] ?? 0,
+            'updated' => $summary['updated'] ?? 0,
+            'skipped' => $summary['skipped'] ?? 0,
+            'date_range' => $summary['date_range'] ?? [],
+        ],
+        'absensi_import',
+        $originalName
+    );
 
     json_response([
         'success' => true,
@@ -108,6 +121,16 @@ try {
         ],
     ], 409);
 } catch (Throwable $e) {
+    ActivityLogService::logCurrentUser(
+        'upload_absensi_failed',
+        'Import absensi gagal diproses.',
+        [
+            'file_name' => $originalName,
+            'error' => $e->getMessage(),
+        ],
+        'absensi_import',
+        $originalName
+    );
     if ($importToken !== '') {
         $metaPath = ensure_storage_path('imports/' . $importToken . '.json');
         @unlink($temporaryPath);

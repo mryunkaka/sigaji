@@ -2,6 +2,7 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
+ActivityLogService::logCurrentUser('open_section', 'Membuka halaman Unit.', ['section' => 'units'], 'section', 'units');
 $searchCondition = '';
 
 $totalUnits = (int) (fetch_one('SELECT COUNT(*) AS total FROM units un')['total'] ?? 0);

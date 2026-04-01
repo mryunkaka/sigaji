@@ -6,10 +6,15 @@
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i ./resources/css/app.css -o ./public/assets/app.css --minify",
     "build:js": "esbuild ./resources/js/app.js --bundle --minify --outfile=./public/assets/app.js",
-    "build": "npm run build:css && npm run build:js"
+    "build:activity-log": "esbuild ./resources/js/activity-log.js --bundle --minify --outfile=./public/assets/activity-log.js",
+    "build": "npm run build:css && npm run build:js && npm run build:activity-log"
   },
   "devDependencies": {
     "esbuild": "^0.25.9",
     "tailwindcss": "^3.4.17"
+  },
+  "dependencies": {
+    "datatables.net": "^2.3.7",
+    "datatables.net-dt": "^2.3.7"
   }
 }

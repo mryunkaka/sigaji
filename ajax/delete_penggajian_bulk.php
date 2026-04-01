@@ -84,6 +84,16 @@ try {
 
     $deletePlaceholders = implode(',', array_fill(0, count($ownedIds), '?'));
     execute_query("DELETE FROM penggajian WHERE id IN ($deletePlaceholders)", $ownedIds);
+    ActivityLogService::logCurrentUser(
+        'delete_penggajian_bulk',
+        'Menghapus payroll secara massal.',
+        [
+            'total_deleted' => count($ownedIds),
+            'penggajian_ids' => $ownedIds,
+        ],
+        'penggajian',
+        implode(',', $ownedIds)
+    );
 
     json_response([
         'success' => true,

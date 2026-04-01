@@ -113,6 +113,19 @@ execute_query(
         'id' => (int) request_value('id'),
     ]
 );
+ActivityLogService::logCurrentUser(
+    'update_penggajian',
+    'Memperbarui data payroll.',
+    [
+        'penggajian_id' => (int) request_value('id'),
+        'user_id' => $userId,
+        'tanggal_awal_gaji' => $tanggalAwalGaji,
+        'tanggal_akhir_gaji' => $tanggalAkhirGaji,
+        'gaji_bersih' => $gajiBersih,
+    ],
+    'penggajian',
+    (int) request_value('id')
+);
 
 json_response([
     'success' => true,

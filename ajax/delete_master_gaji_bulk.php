@@ -60,6 +60,16 @@ try {
 
     $deletePlaceholders = implode(',', array_fill(0, count($ownedIds), '?'));
     execute_query("DELETE FROM master_gaji WHERE id IN ($deletePlaceholders)", $ownedIds);
+    ActivityLogService::logCurrentUser(
+        'delete_master_gaji_bulk',
+        'Menghapus master gaji secara massal.',
+        [
+            'total_deleted' => count($ownedIds),
+            'master_gaji_ids' => $ownedIds,
+        ],
+        'master_gaji',
+        implode(',', $ownedIds)
+    );
 
     json_response([
         'success' => true,

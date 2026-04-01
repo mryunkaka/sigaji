@@ -16,6 +16,15 @@ if ($hasUsers) {
 }
 
 execute_query('DELETE FROM units WHERE id = :id', ['id' => $id]);
+ActivityLogService::logCurrentUser(
+    'delete_unit',
+    'Menghapus unit.',
+    [
+        'unit_id' => $id,
+    ],
+    'unit',
+    $id
+);
 
 json_response([
     'success' => true,

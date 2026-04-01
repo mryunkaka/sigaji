@@ -69,9 +69,19 @@ if ($ownedIds === []) {
 }
 
 $deletePlaceholders = implode(',', array_fill(0, count($ownedIds), '?'));
-execute_query("DELETE FROM absensi WHERE id IN ($deletePlaceholders)", $ownedIds);
+    execute_query("DELETE FROM absensi WHERE id IN ($deletePlaceholders)", $ownedIds);
+    ActivityLogService::logCurrentUser(
+        'delete_absensi_bulk',
+        'Menghapus absensi secara massal.',
+        [
+            'total_deleted' => count($ownedIds),
+            'absensi_ids' => $ownedIds,
+        ],
+        'absensi',
+        implode(',', $ownedIds)
+    );
 
-json_response([
+    json_response([
     'success' => true,
     'message' => count($ownedIds) . ' data absensi berhasil dihapus permanen.',
     'reloadSection' => 'absensi',

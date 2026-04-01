@@ -70,6 +70,16 @@ try {
 
     $deletePlaceholders = implode(',', array_fill(0, count($deletableIds), '?'));
     execute_query("DELETE FROM units WHERE id IN ($deletePlaceholders)", $deletableIds);
+    ActivityLogService::logCurrentUser(
+        'delete_unit_bulk',
+        'Menghapus unit secara massal.',
+        [
+            'total_deleted' => count($deletableIds),
+            'unit_ids' => $deletableIds,
+        ],
+        'unit',
+        implode(',', $deletableIds)
+    );
 
     $skippedCount = max(0, count($requestedIds) - count($deletableIds));
     $message = count($deletableIds) . ' unit berhasil dihapus permanen.';

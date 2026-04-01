@@ -99,6 +99,19 @@ if ($id > 0) {
             'id' => $id,
         ]
     );
+    ActivityLogService::logCurrentUser(
+        'update_absensi',
+        'Memperbarui absensi.',
+        [
+            'absensi_id' => $id,
+            'user_id' => $userId,
+            'tanggal' => request_value('tanggal'),
+            'status' => $status,
+            'shift' => $shift,
+        ],
+        'absensi',
+        $id
+    );
 
     json_response([
         'success' => true,
@@ -140,6 +153,23 @@ $inserted = execute_query(
         'updated_at' => now_string(),
     ]
 );
+
+if ($inserted) {
+    $newId = (int) db()->lastInsertId();
+    ActivityLogService::logCurrentUser(
+        'create_absensi',
+        'Menambahkan absensi manual.',
+        [
+            'absensi_id' => $newId,
+            'user_id' => $userId,
+            'tanggal' => request_value('tanggal'),
+            'status' => $status,
+            'shift' => $shift,
+        ],
+        'absensi',
+        $newId
+    );
+}
 
 json_response([
     'success' => $inserted,

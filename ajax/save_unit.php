@@ -46,6 +46,16 @@ if ($id > 0) {
         }
     }
     execute_query('UPDATE units SET ' . implode(', ', $sets) . ' WHERE id = :id', $payload);
+    ActivityLogService::logCurrentUser(
+        'update_unit',
+        'Memperbarui unit.',
+        [
+            'unit_id' => $id,
+            'nama_unit' => $payload['nama_unit'],
+        ],
+        'unit',
+        $id
+    );
 
     json_response([
         'success' => true,
@@ -59,6 +69,17 @@ $payload['created_at'] = now_string();
 $columns = implode(', ', array_keys($payload));
 $placeholders = ':' . implode(', :', array_keys($payload));
 execute_query('INSERT INTO units (' . $columns . ') VALUES (' . $placeholders . ')', $payload);
+$newId = (int) db()->lastInsertId();
+ActivityLogService::logCurrentUser(
+    'create_unit',
+    'Menambahkan unit baru.',
+    [
+        'unit_id' => $newId,
+        'nama_unit' => $payload['nama_unit'],
+    ],
+    'unit',
+    $newId
+);
 
 json_response([
     'success' => true,

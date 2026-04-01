@@ -1,0 +1,21 @@
+CREATE TABLE `activity_logs` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    `user_id` bigint(20) unsigned DEFAULT NULL,
+    `unit_id` bigint(20) unsigned DEFAULT NULL,
+    `session_token` varchar(255) DEFAULT NULL,
+    `action` varchar(80) NOT NULL,
+    `target_type` varchar(80) NOT NULL DEFAULT '',
+    `target_id` varchar(100) DEFAULT NULL,
+    `description` text NOT NULL,
+    `context_json` longtext DEFAULT NULL,
+    `ip_address` varchar(45) DEFAULT NULL,
+    `user_agent` varchar(255) DEFAULT NULL,
+    `occurred_at` datetime NOT NULL,
+    `created_at` timestamp NULL DEFAULT NULL,
+    `updated_at` timestamp NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `activity_logs_user_id_index` (`user_id`),
+    KEY `activity_logs_unit_id_index` (`unit_id`),
+    KEY `activity_logs_action_index` (`action`),
+    KEY `activity_logs_occurred_at_index` (`occurred_at`)
+);

@@ -89,6 +89,21 @@ try {
     ], 422);
 }
 
+ActivityLogService::logCurrentUser(
+    'update_settings',
+    'Memperbarui setting unit aktif.',
+    [
+        'unit_id' => $authUser['unit_id'],
+        'toleransi_terlambat_menit' => $tolerance,
+        'hari_mulai_periode' => $startDay,
+        'hari_akhir_periode' => $endDay,
+        'global_shift_count' => count($globalRules),
+        'jabatan_shift_count' => count($jabatanRules),
+    ],
+    'unit_settings',
+    $authUser['unit_id']
+);
+
 json_response([
     'success' => true,
     'message' => 'Setting absensi dan periode closing berhasil diperbarui.',

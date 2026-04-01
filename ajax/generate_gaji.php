@@ -77,6 +77,20 @@ if ($processed === 0) {
     json_response(['success' => false, 'message' => 'Tidak ada payroll baru yang dapat dibuat untuk periode tersebut.'], 422);
 }
 
+ActivityLogService::logCurrentUser(
+    'generate_penggajian',
+    'Generate penggajian berhasil dijalankan.',
+    [
+        'month' => $month,
+        'year' => $year,
+        'tanggal_awal' => $tanggalAwal,
+        'tanggal_akhir' => $tanggalAkhir,
+        'processed' => $processed,
+    ],
+    'penggajian',
+    $tanggalAwal . '|' . $tanggalAkhir
+);
+
 json_response([
     'success' => true,
     'message' => "Generate penggajian selesai untuk {$processed} karyawan.",

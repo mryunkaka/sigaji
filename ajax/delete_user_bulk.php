@@ -62,6 +62,16 @@ try {
 
     $deletePlaceholders = implode(',', array_fill(0, count($ownedIds), '?'));
     execute_query("DELETE FROM users WHERE id IN ($deletePlaceholders)", $ownedIds);
+    ActivityLogService::logCurrentUser(
+        'delete_user_bulk',
+        'Menghapus user secara massal.',
+        [
+            'total_deleted' => count($ownedIds),
+            'user_ids' => $ownedIds,
+        ],
+        'user',
+        implode(',', $ownedIds)
+    );
 
     json_response([
         'success' => true,

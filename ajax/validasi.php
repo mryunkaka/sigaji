@@ -2,6 +2,7 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
+ActivityLogService::logCurrentUser('open_section', 'Membuka halaman Validasi.', ['section' => 'validasi'], 'section', 'validasi');
 
 $totalMasters = (int) (fetch_one(
     'SELECT COUNT(*) AS total

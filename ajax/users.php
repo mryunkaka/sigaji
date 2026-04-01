@@ -2,6 +2,7 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
+ActivityLogService::logCurrentUser('open_section', 'Membuka halaman User.', ['section' => 'users'], 'section', 'users');
 $unitSettings = fetch_one(
     'SELECT nama_unit, toleransi_terlambat_menit
      FROM units

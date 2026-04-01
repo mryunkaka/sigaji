@@ -202,6 +202,41 @@
     window.setTimeout(() => toast.classList.add('hidden'), 4000);
   };
 
+  const sendActivityLog = (actionName, description, context = {}, targetType = '', targetId = '') => {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    if (!csrf || !actionName || !description) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('_csrf', csrf);
+    formData.append('action_name', actionName);
+    formData.append('description', description);
+    formData.append('target_type', targetType);
+    formData.append('target_id', targetId);
+    formData.append('context', JSON.stringify(context || {}));
+
+    fetch('ajax/log_activity.php', {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin',
+      keepalive: true,
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-Token': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    }).catch(() => {});
+  };
+
+  const extractActivityLabel = (element) => String(
+    element?.dataset.activityLabel
+      || element?.getAttribute('title')
+      || element?.getAttribute('aria-label')
+      || element?.textContent
+      || ''
+  ).replace(/\s+/g, ' ').trim();
+
   const ensureProgressOverlay = () => {
     let overlay = document.getElementById('upload-progress-overlay');
     if (overlay) {
@@ -1350,12 +1385,22 @@
 
     const openModal = event.target.closest('[data-open-modal]');
     if (openModal) {
+      const label = extractActivityLabel(openModal) || 'modal';
+      sendActivityLog('open_modal', `Membuka ${label}.`, {
+        section: currentSection,
+        modal_id: openModal.dataset.openModal || '',
+      }, 'modal', openModal.dataset.openModal || '');
       openModalById(openModal.dataset.openModal);
       return;
     }
 
     const openRemoteModalTrigger = event.target.closest('[data-open-remote-modal]');
     if (openRemoteModalTrigger) {
+      const label = extractActivityLabel(openRemoteModalTrigger) || 'modal';
+      sendActivityLog('open_remote_modal', `Membuka ${label}.`, {
+        section: currentSection,
+        modal_url: openRemoteModalTrigger.dataset.modalUrl || '',
+      }, 'modal', openRemoteModalTrigger.dataset.modalTarget || '');
       openRemoteModal(openRemoteModalTrigger);
       return;
     }
@@ -1608,5 +1653,31 @@
     dismissBootLoaderEarly();
   });
 
+  let lastHeartbeatAt = 0;
+  const heartbeat = () => {
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
+
+    const now = Date.now();
+    if ((now - lastHeartbeatAt) < 45000) {
+      return;
+    }
+
+    lastHeartbeatAt = now;
+    sendActivityLog('heartbeat', 'User aktif di aplikasi.', {
+      section: currentSection,
+      minute_slot: new Date().toISOString().slice(0, 16),
+    }, 'session', currentSection);
+  };
+
+  window.setInterval(heartbeat, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      heartbeat();
+    }
+  });
+
   loadSection(currentSection, sectionParams[currentSection] || null);
+  window.setTimeout(heartbeat, 15000);
 })();

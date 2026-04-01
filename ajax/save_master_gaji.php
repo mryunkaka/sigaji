@@ -43,6 +43,15 @@ execute_query(
         'id' => (int) request_value('id'),
     ]
 );
+ActivityLogService::logCurrentUser(
+    'update_master_gaji',
+    'Memperbarui master gaji.',
+    [
+        'master_gaji_id' => (int) request_value('id'),
+    ],
+    'master_gaji',
+    (int) request_value('id')
+);
 
 json_response([
     'success' => true,

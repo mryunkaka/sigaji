@@ -2,6 +2,7 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
+ActivityLogService::logCurrentUser('open_modal', 'Membuka modal absensi.', ['mode' => request_value('mode', 'view'), 'id' => (int) request_value('id', 0)], 'absensi', (string) request_value('id', ''));
 
 $id = (int) request_value('id', 0);
 $mode = (string) request_value('mode', 'view');

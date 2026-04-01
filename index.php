@@ -71,7 +71,7 @@ if ($requestPath !== '/' && $requestPath !== '/index.php') {
         $dispatchPhp($requestPath);
     }
 
-    if (in_array($requestPath, ['/logout.php', '/print_slip.php', '/print_laporan.php'], true)) {
+    if (in_array($requestPath, ['/logout.php', '/print_slip.php', '/print_laporan.php', '/activity-log.php'], true)) {
         $dispatchPhp($requestPath);
     }
 }
@@ -79,6 +79,7 @@ if ($requestPath !== '/' && $requestPath !== '/index.php') {
 require __DIR__ . '/bootstrap/app.php';
 
 $error = '';
+$authNotice = Auth::consumeNotice();
 
 if (is_post() && request_value('action') === 'login') {
     verify_csrf();
@@ -148,6 +149,10 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
                     <p class="text-xl font-bold uppercase tracking-tight text-slate-900 sm:text-2xl">Sistem Penggajian</p>
                     <h2 class="mt-3 text-3xl font-semibold text-slate-900 sm:text-[4rem] sm:leading-none">Sign in</h2>
                 </div>
+
+                <?php if ($authNotice !== ''): ?>
+                    <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><?= e($authNotice) ?></div>
+                <?php endif; ?>
 
                 <?php if ($error !== ''): ?>
                     <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><?= e($error) ?></div>

@@ -1,0 +1,41 @@
+.dataTables_wrapper {
+  color: #334155;
+}
+
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_length {
+  margin-bottom: 1rem;
+}
+
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  background: rgba(248, 250, 252, 0.9);
+  color: #0f172a;
+  padding: 0.65rem 0.9rem;
+}
+
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  margin-top: 1rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border-radius: 0.8rem !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  border: 1px solid #0f172a !important;
+  background: #0f172a !important;
+  color: #fff !important;
+}
+
+#activity-log-table thead th {
+  white-space: nowrap;
+}
+
+#activity-log-table tbody td {
+  vertical-align: top;
+}
