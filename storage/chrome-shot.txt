@@ -1,0 +1,7 @@
+﻿chrome.exe : 166918 bytes written to file D:\Project\Web\sigaji\storage\debug-settings.png
+At line:2 char:1
++ & 'C:\Program Files\Google\Chrome\Application\chrome.exe' --headless= ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (166918 bytes wr...ug-settings.png:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

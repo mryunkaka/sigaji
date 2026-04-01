@@ -102,13 +102,22 @@ function closing_period_range(?DateTimeInterface $reference = null): array
         $base = DateTimeImmutable::createFromInterface($base);
     }
 
-    $previousMonth = $base->modify('first day of last month');
-    $start = $previousMonth->setDate(
-        (int) $previousMonth->format('Y'),
-        (int) $previousMonth->format('m'),
+    $closingEndBase = ((int) $base->format('d') >= 26)
+        ? $base->modify('first day of this month')
+        : $base->modify('first day of last month');
+
+    $end = $closingEndBase->setDate(
+        (int) $closingEndBase->format('Y'),
+        (int) $closingEndBase->format('m'),
+        25
+    );
+
+    $closingStartBase = $end->modify('first day of last month');
+    $start = $closingStartBase->setDate(
+        (int) $closingStartBase->format('Y'),
+        (int) $closingStartBase->format('m'),
         26
     );
-    $end = $base->setDate((int) $base->format('Y'), (int) $base->format('m'), 25);
 
     return [
         'start' => $start->format('Y-m-d'),
@@ -257,8 +266,11 @@ function expects_json(): bool
 {
     $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
     $requestedWith = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+    $requestUri = str_replace('\\', '/', strtolower((string) ($_SERVER['REQUEST_URI'] ?? '')));
 
-    return str_contains($accept, 'application/json') || $requestedWith === 'xmlhttprequest';
+    return str_contains($accept, 'application/json')
+        || $requestedWith === 'xmlhttprequest'
+        || str_contains($requestUri, '/ajax/');
 }
 
 function db(): PDO

@@ -60,8 +60,13 @@ $statusOptions = [
 ];
 
 $employees = fetch_all(
-    'SELECT u.id, u.name, u.jabatan, COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat
+    'SELECT u.id,
+            u.name,
+            u.jabatan,
+            COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat,
+            COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit
      FROM users u
+     JOIN units un ON un.id = u.unit_id
      LEFT JOIN master_gaji mg ON mg.user_id = u.id
      WHERE u.unit_id = :unit_id AND u.role != :role
      ORDER BY u.name',
@@ -75,7 +80,7 @@ $renderEmployeeSelect = static function (string $name, string $label, array $emp
     $options = '<option value="">Pilih Karyawan</option>';
     foreach ($employees as $employee) {
         $isSelected = (string) $employee['id'] === (string) $selected ? ' selected' : '';
-        $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
+        $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '" data-toleransi-terlambat="' . e((string) ($employee['toleransi_terlambat_menit'] ?? 0)) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
     }
 
     return '<div class="block">
@@ -96,7 +101,7 @@ $renderAbsensiForm = static function (array $employees, array $statusOptions, ar
         . $renderEmployeeSelect('user_id', 'Karyawan', $employees, $item['user_id'] ?? null)
         . ui_input('tanggal', 'Tanggal', $item['tanggal'] ?? '', 'date', ['required' => 'required'])
         . ui_select('shift', 'Shift', $shiftOptions, $item['shift'] ?? '', ['data-absensi-calc' => '1'])
-        . ui_select('status', 'Status', $statusOptions, $item['status'] ?? 'hadir', ['required' => 'required'])
+        . ui_select('status', 'Status', $statusOptions, $item['status'] ?? 'hadir', ['required' => 'required', 'data-absensi-calc' => '1'])
         . ui_input('jam_masuk', 'Jam Masuk', isset($item['jam_masuk']) ? substr((string) $item['jam_masuk'], 0, 5) : '', 'time', ['data-absensi-calc' => '1'])
         . ui_input('jam_keluar', 'Jam Keluar', isset($item['jam_keluar']) ? substr((string) $item['jam_keluar'], 0, 5) : '', 'time')
         . ui_input('total_menit_terlambat', 'Total Menit Terlambat', $item['total_menit_terlambat'] ?? 0, 'number', ['min' => '0', 'readonly' => 'readonly'])
@@ -233,7 +238,7 @@ echo '<div class="grid gap-4 xl:grid-cols-5">'
 
 echo '<div class="mt-6 space-y-6">';
 echo ui_panel('Upload Absensi', $uploadForm, ['subtitle' => 'Mirror dari import Excel lama. File CSV/XLSX akan diparsing lalu membuat user/master gaji bila belum ada.']);
-echo ui_panel('Filter Periode Absensi', $filterForm, ['subtitle' => 'Default periode closing aktif: ' . $rangeLabel . '. Tanggal bisa diubah secara custom.']);
+echo ui_panel('Filter Periode Absensi', $filterForm, ['subtitle' => 'Default periode closing terakhir selesai: ' . $rangeLabel . '. Tanggal bisa diubah secara custom.']);
 echo ui_panel('Riwayat Absensi',
     '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
     . '<div class="flex flex-wrap gap-3">'

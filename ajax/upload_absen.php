@@ -26,10 +26,19 @@ try {
     }
     restore_error_handler();
     ob_end_clean();
+    $reloadParams = null;
+    if (!empty($summary['date_range']['start']) && !empty($summary['date_range']['end'])) {
+        $reloadParams = [
+            'start_date' => (string) $summary['date_range']['start'],
+            'end_date' => (string) $summary['date_range']['end'],
+        ];
+    }
+
     json_response([
         'success' => true,
         'message' => $message,
         'reloadSection' => 'absensi',
+        'reloadParams' => $reloadParams,
     ]);
 } catch (Throwable $e) {
     restore_error_handler();

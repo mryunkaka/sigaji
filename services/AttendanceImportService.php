@@ -26,6 +26,10 @@ final class AttendanceImportService
             'updated' => 0,
             'skipped' => 0,
             'errors' => [],
+            'date_range' => [
+                'start' => null,
+                'end' => null,
+            ],
         ];
 
         foreach ($rows as $index => $row) {
@@ -49,10 +53,26 @@ final class AttendanceImportService
                     continue;
                 }
 
-                $user = fetch_one('SELECT * FROM users WHERE unit_id = :unit_id AND name = :name LIMIT 1', [
-                    'unit_id' => $unitId,
-                    'name' => $nama,
-                ]);
+                if ($summary['date_range']['start'] === null || $tanggal < $summary['date_range']['start']) {
+                    $summary['date_range']['start'] = $tanggal;
+                }
+
+                if ($summary['date_range']['end'] === null || $tanggal > $summary['date_range']['end']) {
+                    $summary['date_range']['end'] = $tanggal;
+                }
+
+                $user = fetch_one(
+                    'SELECT u.*,
+                            COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit_efektif
+                     FROM users u
+                     JOIN units un ON un.id = u.unit_id
+                     WHERE u.unit_id = :unit_id AND u.name = :name
+                     LIMIT 1',
+                    [
+                        'unit_id' => $unitId,
+                        'name' => $nama,
+                    ]
+                );
 
                 if (!$user) {
                     $email = self::generateUniqueEmail($nama, $unitId);
@@ -71,7 +91,15 @@ final class AttendanceImportService
                             'updated_at' => now_string(),
                         ]
                     );
-                    $user = fetch_one('SELECT * FROM users WHERE email = :email LIMIT 1', ['email' => $email]);
+                    $user = fetch_one(
+                        'SELECT u.*,
+                                COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit_efektif
+                         FROM users u
+                         JOIN units un ON un.id = u.unit_id
+                         WHERE u.email = :email
+                         LIMIT 1',
+                        ['email' => $email]
+                    );
                 }
 
                 PayrollService::ensureMasterGaji((int) $user['id']);
@@ -79,9 +107,13 @@ final class AttendanceImportService
                 $status = self::determineStatus($jamMasukRaw, $jamKeluarRaw, $shift);
                 $jamMasuk = $status === 'hadir' ? self::parseTimeValue($jamMasukRaw) : null;
                 $jamKeluar = $status === 'hadir' ? self::parseTimeValue($jamKeluarRaw) : null;
-                $totalTerlambat = $status === 'hadir'
-                    ? self::calculateLateMinutes($jamMasuk, $shift, $jabatan)
-                    : 0;
+                $totalTerlambat = AttendanceRules::calculateLateFromRecord(
+                    $status,
+                    $jamMasuk,
+                    $shift,
+                    $jabatan,
+                    (int) ($user['toleransi_terlambat_menit_efektif'] ?? 0)
+                );
 
                 $master = PayrollService::ensureMasterGaji((int) $user['id']);
                 $potonganRate = (int) round((float) ($master['potongan_terlambat'] ?? 1000));
@@ -340,73 +372,6 @@ final class AttendanceImportService
         }
 
         return ($jamMasuk !== '' || $jamKeluar !== '') ? 'hadir' : 'alpa';
-    }
-
-    private static function calculateLateMinutes(?string $jamMasuk, ?int $shift, string $jabatan): int
-    {
-        if (!$jamMasuk || !$shift) {
-            return 0;
-        }
-
-        [$hour, $minute] = array_map('intval', explode(':', substr($jamMasuk, 0, 5)));
-        $arrival = ($hour * 60) + $minute;
-        $role = strtolower(trim($jabatan));
-
-        if ($role === 'security') {
-            $target = match ($shift) {
-                1 => 8 * 60,
-                2 => 16 * 60,
-                3 => (23 * 60) + 59,
-                default => null,
-            };
-
-            if ($target === null) {
-                return 0;
-            }
-
-            if ($shift === 3) {
-                if ($hour < 23 || ($hour === 23 && $minute < 59)) {
-                    return 0;
-                }
-                if ($hour < 12) {
-                    $arrival += 1440;
-                }
-            }
-
-            return max(0, $arrival - $target);
-        }
-
-        if ($role === 'general') {
-            if ($shift === 1) {
-                return max(0, $arrival - (7 * 60));
-            }
-
-            if ($shift === 2) {
-                if ($arrival < (7 * 60)) {
-                    $arrival += 1440;
-                }
-                return max(0, $arrival - (19 * 60));
-            }
-
-            return 0;
-        }
-
-        $target = match ($shift) {
-            1 => 7 * 60,
-            2 => 15 * 60,
-            3 => 23 * 60,
-            default => null,
-        };
-
-        if ($target === null) {
-            return 0;
-        }
-
-        if ($shift === 3 && $arrival < (7 * 60)) {
-            $arrival += 1440;
-        }
-
-        return max(0, $arrival - $target);
     }
 
     private static function generateUniqueEmail(string $name, int $unitId): string

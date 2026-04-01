@@ -228,6 +228,7 @@ CREATE TABLE `units` (
   `alamat_unit` text DEFAULT NULL,
   `no_hp_unit` varchar(255) DEFAULT NULL,
   `logo_unit` varchar(255) DEFAULT NULL,
+  `toleransi_terlambat_menit` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -236,12 +237,12 @@ CREATE TABLE `units` (
 -- Dumping data for table `units`
 --
 
-INSERT INTO `units` (`id`, `nama_unit`, `alamat_unit`, `no_hp_unit`, `logo_unit`, `created_at`, `updated_at`) VALUES
-(1, 'HOTEL HARMONY', 'Jl. Raya Batulicin, Kp. Baru, Kec. Simpang Empat, Kab. Tanah Bumbu, Kalimantan Selatan 72271', '087878987654', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
-(2, 'GUESTHOUSE RUMA', 'Jl. Suryagandamana, Kotabaru Tengah, Kec. Pulau Laut, ...', '087877521992', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
-(3, 'HOTEL GALERY', 'Jl. Pangeran Hidayat No.26, Sebatung, ...', '085827191234', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
-(4, 'HOTEL KARTIKA', 'Jl. Veteran No.2, Dirgahayu, ...', '082150942567', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
-(5, 'HOTEL LAVENDER', 'Jl. Raya provinsi No. km 163, Sungai Cuka, ...', '085289987654', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21');
+INSERT INTO `units` (`id`, `nama_unit`, `alamat_unit`, `no_hp_unit`, `logo_unit`, `toleransi_terlambat_menit`, `created_at`, `updated_at`) VALUES
+(1, 'HOTEL HARMONY', 'Jl. Raya Batulicin, Kp. Baru, Kec. Simpang Empat, Kab. Tanah Bumbu, Kalimantan Selatan 72271', '087878987654', NULL, 0, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
+(2, 'GUESTHOUSE RUMA', 'Jl. Suryagandamana, Kotabaru Tengah, Kec. Pulau Laut, ...', '087877521992', NULL, 0, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
+(3, 'HOTEL GALERY', 'Jl. Pangeran Hidayat No.26, Sebatung, ...', '085827191234', NULL, 0, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
+(4, 'HOTEL KARTIKA', 'Jl. Veteran No.2, Dirgahayu, ...', '082150942567', NULL, 0, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
+(5, 'HOTEL LAVENDER', 'Jl. Raya provinsi No. km 163, Sungai Cuka, ...', '085289987654', NULL, 0, '2025-11-28 12:31:21', '2025-11-28 12:31:21');
 
 -- --------------------------------------------------------
 
@@ -268,6 +269,7 @@ CREATE TABLE `users` (
   `nik` varchar(255) DEFAULT NULL,
   `npwp` varchar(255) DEFAULT NULL,
   `jabatan` varchar(255) DEFAULT NULL,
+  `toleransi_terlambat_menit` int(11) DEFAULT NULL,
   `role` varchar(255) NOT NULL DEFAULT 'karyawan',
   `unit_id` bigint(20) UNSIGNED NOT NULL,
   `tanggal_bergabung` date DEFAULT NULL,
@@ -280,9 +282,9 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `two_factor_secret`, `two_factor_recovery_codes`, `two_factor_confirmed_at`, `no_hp`, `alamat`, `foto`, `tanggal_lahir`, `tempat_lahir`, `jenis_kelamin`, `agama`, `status_perkawinan`, `nik`, `npwp`, `jabatan`, `role`, `unit_id`, `tanggal_bergabung`, `remember_token`, `created_at`, `updated_at`) VALUES
-(1, 'John Doe', 'owner@example.com', '$2y$12$oKdV1yvh6TPvcljnfdUJ6eX4Vh6n5xAPD/mE01mADh7M6WNsj6Kvq', NULL, NULL, NULL, '081234567890', 'Jl. Raya Batulicin, Kp. Baru, Kec. Simpang Empat, Kabupaten Tanah Bumbu, Kalimantan Selatan 72271', NULL, '1980-01-01', 'Batulicin', 'Laki-laki', 'Islam', 'Menikah', '1234567890123456', '1234567890', 'Owner', 'owner', 1, '2020-01-01', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
-(2, 'Admin', 'admin@example.com', '$2y$12$.5Xsd5UqzJRGTgtAl0DI8O9oJJnPaaI6H4O.1Gz0h8QpAZlzKcOOS', NULL, NULL, NULL, '081234567891', 'Jl. Raya Batulicin, Kp. Baru, Kec. Simpang Empat, Kabupaten Tanah Bumbu, Kalimantan Selatan 72271', NULL, '1990-05-10', 'Kotabaru', 'Perempuan', 'Kristen', 'Belum Menikah', '1234567890123457', '1234567891', 'Personalia', 'owner', 1, '2021-03-15', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21');
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `two_factor_secret`, `two_factor_recovery_codes`, `two_factor_confirmed_at`, `no_hp`, `alamat`, `foto`, `tanggal_lahir`, `tempat_lahir`, `jenis_kelamin`, `agama`, `status_perkawinan`, `nik`, `npwp`, `jabatan`, `toleransi_terlambat_menit`, `role`, `unit_id`, `tanggal_bergabung`, `remember_token`, `created_at`, `updated_at`) VALUES
+(1, 'John Doe', 'owner@example.com', '$2y$12$oKdV1yvh6TPvcljnfdUJ6eX4Vh6n5xAPD/mE01mADh7M6WNsj6Kvq', NULL, NULL, NULL, '081234567890', 'Jl. Raya Batulicin, Kp. Baru, Kec. Simpang Empat, Kabupaten Tanah Bumbu, Kalimantan Selatan 72271', NULL, '1980-01-01', 'Batulicin', 'Laki-laki', 'Islam', 'Menikah', '1234567890123456', '1234567890', 'Owner', NULL, 'owner', 1, '2020-01-01', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21'),
+(2, 'Admin', 'admin@example.com', '$2y$12$.5Xsd5UqzJRGTgtAl0DI8O9oJJnPaaI6H4O.1Gz0h8QpAZlzKcOOS', NULL, NULL, NULL, '081234567891', 'Jl. Raya Batulicin, Kp. Baru, Kec. Simpang Empat, Kabupaten Tanah Bumbu, Kalimantan Selatan 72271', NULL, '1990-05-10', 'Kotabaru', 'Perempuan', 'Kristen', 'Belum Menikah', '1234567890123457', '1234567891', 'Personalia', NULL, 'owner', 1, '2021-03-15', NULL, '2025-11-28 12:31:21', '2025-11-28 12:31:21');
 
 --
 -- Indexes for dumped tables

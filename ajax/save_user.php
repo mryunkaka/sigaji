@@ -51,6 +51,7 @@ $payload = [
     'nik' => trim((string) request_value('nik')),
     'npwp' => trim((string) request_value('npwp')),
     'jabatan' => trim((string) request_value('jabatan')),
+    'toleransi_terlambat_menit' => request_value('toleransi_terlambat_menit', '') === '' ? null : max(0, (int) request_value('toleransi_terlambat_menit')),
     'role' => request_value('role', 'karyawan'),
     'unit_id' => $unitId,
     'tanggal_bergabung' => request_value('tanggal_bergabung') ?: null,

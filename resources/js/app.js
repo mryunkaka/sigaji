@@ -2,11 +2,11 @@
   const STORAGE_KEY = 'sigaji.active.section';
   const PARAMS_KEY = 'sigaji.section.params';
   const PARAMS_MIGRATION_KEY = 'sigaji.section.params.migration';
-  const PARAMS_MIGRATION_VERSION = 'closing-period-26-25-v1';
+  const PARAMS_MIGRATION_VERSION = 'closing-period-26-25-v2';
   const TABLE_STATE_KEY = 'sigaji.table.state';
   const SIDEBAR_KEY = 'sigaji.sidebar.open';
   const CLOSING_PERIOD_SECTIONS = ['dashboard', 'absensi', 'gaji'];
-  let currentSection = localStorage.getItem(STORAGE_KEY) || window.location.hash.replace('#', '') || 'dashboard';
+  let currentSection = window.location.hash.replace('#', '') || localStorage.getItem(STORAGE_KEY) || 'dashboard';
   let sectionParams = {};
   let tableStates = {};
   let tableSelections = {};
@@ -87,6 +87,8 @@
   };
   let appReady = false;
   let loaderProgress = 0;
+  let bootLoaderDismissed = false;
+  let sectionRequestController = null;
 
   if (!pageContent || !pageTitle || !toast) {
     window.addEventListener('load', () => {
@@ -118,7 +120,7 @@
   setSidebarState(getDefaultSidebarState());
 
   const showAppLoader = () => {
-    if (!appLoader) {
+    if (!appLoader || bootLoaderDismissed) {
       return;
     }
     appLoader.style.display = 'flex';
@@ -130,6 +132,7 @@
     if (!appLoader) {
       return;
     }
+    bootLoaderDismissed = true;
     appLoader.classList.add('hidden');
     window.setTimeout(() => {
       appLoader.style.display = 'none';
@@ -138,9 +141,26 @@
   };
 
   const finishAppLoader = () => {
+    if (!appLoader || bootLoaderDismissed) {
+      return;
+    }
     setLoaderStep('ready', 'done');
     setLoaderProgress(100, 'Semua asset, komponen, dan data berhasil dimuat.');
     window.setTimeout(hideAppLoader, 180);
+  };
+
+  const dismissBootLoaderEarly = () => {
+    if (bootLoaderDismissed) {
+      return;
+    }
+
+    setLoaderStep('shell', 'done');
+    setLoaderStep('assets', 'done');
+    setLoaderStep('components', 'active');
+    setLoaderProgress(Math.max(loaderProgress, 38), 'Antarmuka siap. Memuat data halaman...');
+    window.setTimeout(() => {
+      hideAppLoader();
+    }, 120);
   };
 
   const setLoaderProgress = (value, status = null) => {
@@ -256,6 +276,8 @@
 
   const getSectionParams = (section) => sectionParams[section] || null;
 
+  const isFullDocumentResponse = (content) => /<!doctype html|<html[\s>]/i.test(String(content || ''));
+
   const parseNumericValue = (text) => {
     const normalized = text.replace(/\s+/g, ' ').trim();
     if (!/\d/.test(normalized)) {
@@ -320,6 +342,92 @@
     updateOutput('gaji_kotor', gajiKotor);
     updateOutput('total_potongan', totalPotongan);
     updateOutput('gaji_bersih', gajiBersih);
+  };
+
+  const normalizeAttendanceValue = (value) => String(value || '').trim().toLowerCase();
+
+  const parseAttendanceTime = (value) => {
+    const time = String(value || '').trim().slice(0, 5);
+    if (!/^\d{2}:\d{2}$/.test(time)) {
+      return null;
+    }
+
+    const [hour, minute] = time.split(':').map(Number);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+      return null;
+    }
+
+    return { hour, minute };
+  };
+
+  const calculateAttendanceLateMinutes = ({ status, jamMasuk, shift, jabatan, toleranceMinutes }) => {
+    if (normalizeAttendanceValue(status) !== 'hadir' || !jamMasuk || !shift) {
+      return 0;
+    }
+
+    const parsedTime = parseAttendanceTime(jamMasuk);
+    if (!parsedTime) {
+      return 0;
+    }
+
+    const { hour, minute } = parsedTime;
+    let arrival = (hour * 60) + minute;
+    const role = normalizeAttendanceValue(jabatan);
+    const tolerance = Math.max(0, Number(toleranceMinutes || 0));
+
+    if (role === 'security') {
+      let target = null;
+      if (shift === '1') target = 8 * 60;
+      if (shift === '2') target = 16 * 60;
+      if (shift === '3') target = (23 * 60) + 59;
+
+      if (target === null) {
+        return 0;
+      }
+
+      if (shift === '3') {
+        if (hour < 23 || (hour === 23 && minute < 59)) {
+          return 0;
+        }
+
+        if (hour < 12) {
+          arrival += 1440;
+        }
+      }
+
+      return Math.max(0, arrival - (target + tolerance));
+    }
+
+    if (role === 'general') {
+      if (shift === '1') {
+        return Math.max(0, arrival - ((7 * 60) + tolerance));
+      }
+
+      if (shift === '2') {
+        if (arrival < (7 * 60)) {
+          arrival += 1440;
+        }
+
+        return Math.max(0, arrival - ((19 * 60) + tolerance));
+      }
+
+      return 0;
+    }
+
+    let target = null;
+    if (shift === '1') target = 7 * 60;
+    if (shift === '2') target = 15 * 60;
+    if (shift === '3') target = 23 * 60;
+
+    if (target === null) {
+      return 0;
+    }
+
+    if (shift === '3' && arrival < (7 * 60)) {
+      arrival += 1440;
+    }
+
+    return Math.max(0, arrival - (target + tolerance));
   };
 
   const setTableLoaderState = (wrapper, loading) => {
@@ -926,6 +1034,13 @@
       sectionParams[section] = params;
       persistSectionParams();
     }
+    if (sectionRequestController) {
+      sectionRequestController.abort();
+    }
+    const controller = new AbortController();
+    sectionRequestController = controller;
+    const { signal } = controller;
+    let timeoutId = null;
     const activeParams = sectionParams[section] || {};
     const query = new URLSearchParams(activeParams).toString();
     localStorage.setItem(STORAGE_KEY, section);
@@ -934,6 +1049,11 @@
     setActiveNav(section);
     pageContent.classList.add('page-busy');
     pageContent.innerHTML = '<div class="soft-card p-8 text-sm text-slate-500">Memuat data...</div>';
+    if (!bootLoaderDismissed) {
+      window.requestAnimationFrame(() => {
+        dismissBootLoaderEarly();
+      });
+    }
     setLoaderStep('assets', 'done');
     setLoaderStep('components', 'active');
     setLoaderProgress(45, 'Menyusun komponen antarmuka...');
@@ -943,17 +1063,71 @@
         setLoaderStep('data', 'active');
         setLoaderProgress(70, 'Mengambil data halaman awal...');
       }, 80);
-      const response = await fetch(`ajax/${section}.php${query ? '?' + query : ''}`, { credentials: 'same-origin' });
-      pageContent.innerHTML = await response.text();
+      timeoutId = window.setTimeout(() => {
+        controller.abort('timeout');
+      }, 12000);
+      const response = await fetch(`ajax/${section}.php${query ? '?' + query : ''}`, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal,
+      });
+      window.clearTimeout(timeoutId);
+      if (!response.ok) {
+        throw new Error(`Gagal memuat halaman (${response.status}).`);
+      }
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      const responseText = await response.text();
+
+      if (contentType.includes('application/json')) {
+        const result = parseJsonResponse(responseText);
+        if (handleUnauthenticated(result)) {
+          return;
+        }
+        throw new Error(result.message || 'Respons halaman tidak valid.');
+      }
+
+      if (isFullDocumentResponse(responseText)) {
+        const looksLikeLoginPage = /name=\"action\"\s+value=\"login\"|sign in/i.test(responseText);
+        if (looksLikeLoginPage) {
+          window.location.href = 'index.php';
+          return;
+        }
+
+        window.location.reload();
+        return;
+      }
+
+      pageContent.innerHTML = responseText;
       initDataTables();
       appReady = true;
       setLoaderStep('data', 'done');
       setLoaderStep('ready', 'active');
       setLoaderProgress(92, 'Finalisasi tampilan siap pakai...');
-    } finally {
-      pageContent.classList.remove('page-busy');
-      if (document.readyState === 'complete') {
+      if (!bootLoaderDismissed) {
         finishAppLoader();
+      }
+    } catch (error) {
+      if (signal.aborted) {
+        if (error?.name === 'AbortError') {
+          if (signal.reason === 'timeout') {
+            pageContent.innerHTML = '<div class="rounded-[28px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">Halaman terlalu lama dimuat. Silakan coba lagi.</div>';
+            showToast('Memuat halaman terlalu lama. Coba lagi.', 'error');
+          }
+          return;
+        }
+      }
+      pageContent.innerHTML = `<div class="rounded-[28px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">${error.message}</div>`;
+      showToast(error.message, 'error');
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      pageContent.classList.remove('page-busy');
+      if (!bootLoaderDismissed && document.readyState === 'complete' && appReady) {
+        finishAppLoader();
+      }
+      if (sectionRequestController === controller) {
+        sectionRequestController = null;
       }
     }
   };
@@ -1004,7 +1178,10 @@
         closeModalById(result.closeModal);
       }
       if (result.reloadSection) {
-        loadSection(result.reloadSection, getSectionParams(result.reloadSection));
+        const reloadParams = result.reloadParams && typeof result.reloadParams === 'object'
+          ? result.reloadParams
+          : getSectionParams(result.reloadSection);
+        loadSection(result.reloadSection, reloadParams);
       }
     }
   };
@@ -1170,6 +1347,7 @@
     }
 
     const userSelect = form.querySelector('[name="user_id"]');
+    const status = form.querySelector('[name="status"]')?.value || '';
     const shift = form.querySelector('[name="shift"]')?.value || '';
     const jamMasuk = form.querySelector('[name="jam_masuk"]')?.value || '';
     const totalField = form.querySelector('[name="total_menit_terlambat"]');
@@ -1180,25 +1358,22 @@
     }
 
     const selectedOption = userSelect.options[userSelect.selectedIndex];
+    if (!selectedOption || !selectedOption.value) {
+      totalField.value = '0';
+      jumlahField.value = '0';
+      return;
+    }
+
     const jabatan = (selectedOption?.dataset.jabatan || '').toLowerCase();
     const potonganTerlambat = Number(selectedOption?.dataset.potonganTerlambat || 1000);
-
-    let jamMasukSah = null;
-    if (jabatan !== 'security' && shift === '1') jamMasukSah = '08:00';
-    if (jabatan !== 'security' && shift === '2') jamMasukSah = '16:00';
-    if (jabatan !== 'security' && shift === '3') jamMasukSah = '23:00';
-    if (jabatan === 'security' && shift === '1') jamMasukSah = '07:00';
-    if (jabatan === 'security' && shift === '2') jamMasukSah = '15:00';
-    if (jabatan === 'security' && shift === '3') jamMasukSah = '00:00';
-
-    let totalMenit = 0;
-    if (jamMasuk && jamMasukSah) {
-      const [actualHour, actualMinute] = jamMasuk.split(':').map(Number);
-      const [targetHour, targetMinute] = jamMasukSah.split(':').map(Number);
-      const actual = (actualHour * 60) + actualMinute;
-      const target = (targetHour * 60) + targetMinute;
-      totalMenit = Math.max(0, actual - target);
-    }
+    const toleransiTerlambat = Number(selectedOption?.dataset.toleransiTerlambat || 0);
+    const totalMenit = calculateAttendanceLateMinutes({
+      status,
+      jamMasuk,
+      shift,
+      jabatan,
+      toleranceMinutes: toleransiTerlambat,
+    });
 
     totalField.value = String(totalMenit);
     jumlahField.value = String(totalMenit * potonganTerlambat);
@@ -1243,7 +1418,7 @@
       finishAppLoader();
       return;
     }
-    showAppLoader();
+    dismissBootLoaderEarly();
   });
 
   loadSection(currentSection, sectionParams[currentSection] || null);

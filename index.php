@@ -1,5 +1,81 @@
 <?php
 
+/**
+ * Local-dev front controller fallback.
+ * Some localhost servers route every request to index.php, so dispatch known
+ * project endpoints manually before rendering the shell page.
+ */
+$requestPath = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/');
+$requestPath = '/' . ltrim(str_replace('\\', '/', $requestPath), '/');
+$scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+$scriptDir = rtrim(str_replace('\\', '/', dirname($scriptName)), '/.');
+
+if ($scriptDir !== '' && $scriptDir !== '/' && str_starts_with($requestPath, $scriptDir . '/')) {
+    $requestPath = substr($requestPath, strlen($scriptDir));
+    $requestPath = $requestPath === '' ? '/' : $requestPath;
+}
+
+$serveStaticFile = static function (string $absolutePath): never {
+    if (!is_file($absolutePath)) {
+        http_response_code(404);
+        exit('File tidak ditemukan.');
+    }
+
+    $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
+    $mimeTypes = [
+        'css' => 'text/css; charset=UTF-8',
+        'js' => 'text/javascript; charset=UTF-8',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'svg' => 'image/svg+xml',
+        'ico' => 'image/x-icon',
+        'pdf' => 'application/pdf',
+    ];
+
+    header('Content-Type: ' . ($mimeTypes[$extension] ?? 'application/octet-stream'));
+    header('Content-Length: ' . (string) filesize($absolutePath));
+    readfile($absolutePath);
+    exit;
+};
+
+$dispatchPhp = static function (string $relativePath): never {
+    $target = realpath(__DIR__ . '/' . ltrim($relativePath, '/'));
+    if ($target === false || !is_file($target)) {
+        http_response_code(404);
+        exit('Halaman tidak ditemukan.');
+    }
+
+    require $target;
+    exit;
+};
+
+if ($requestPath !== '/' && $requestPath !== '/index.php') {
+    if (str_starts_with($requestPath, '/assets/')) {
+        $assetPath = realpath(__DIR__ . '/public' . $requestPath);
+        if ($assetPath !== false && str_starts_with(str_replace('\\', '/', $assetPath), str_replace('\\', '/', realpath(__DIR__ . '/public/assets') ?: ''))) {
+            $serveStaticFile($assetPath);
+        }
+    }
+
+    if (str_starts_with($requestPath, '/uploads/')) {
+        $uploadPath = realpath(__DIR__ . '/public' . $requestPath);
+        if ($uploadPath !== false && str_starts_with(str_replace('\\', '/', $uploadPath), str_replace('\\', '/', realpath(__DIR__ . '/public/uploads') ?: ''))) {
+            $serveStaticFile($uploadPath);
+        }
+    }
+
+    if (str_starts_with($requestPath, '/ajax/')) {
+        $dispatchPhp($requestPath);
+    }
+
+    if (in_array($requestPath, ['/logout.php', '/print_slip.php', '/print_laporan.php'], true)) {
+        $dispatchPhp($requestPath);
+    }
+}
+
 require __DIR__ . '/bootstrap/app.php';
 
 $error = '';
@@ -123,6 +199,7 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
                     <button class="nav-link nav-pill" data-section="gaji"><?= ui_icon('banknotes', 'h-5 w-5') ?> Gaji</button>
                     <button class="nav-link nav-pill" data-section="users"><?= ui_icon('users', 'h-5 w-5') ?> User</button>
                     <button class="nav-link nav-pill" data-section="units"><?= ui_icon('building-office-2', 'h-5 w-5') ?> Unit</button>
+                    <button class="nav-link nav-pill" data-section="settings"><?= ui_icon('cog-6-tooth', 'h-5 w-5') ?> Setting</button>
                 </nav>
 
                 <div class="pt-1">

@@ -92,7 +92,7 @@ echo '<div class="grid gap-4 xl:grid-cols-4">'
     . '</div>';
 
 echo '<div class="mt-6 space-y-6">'
-    . ui_panel('Filter Dashboard', $filterForm, ['subtitle' => 'Default periode closing aktif: ' . $rangeLabel . '. Pilih periode dashboard sesuai kebutuhan laporan.'])
+    . ui_panel('Filter Dashboard', $filterForm, ['subtitle' => 'Default periode closing terakhir selesai: ' . $rangeLabel . '. Pilih periode dashboard sesuai kebutuhan laporan.'])
     . ui_panel('Penggajian Terbaru', ui_table(
         ['Karyawan', 'Periode', 'Gaji Bersih', 'Total Potongan', ['label' => 'Aksi', 'sortable' => false]],
         $rows !== '' ? $rows : '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Belum ada data penggajian.</td></tr>',

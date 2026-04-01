@@ -8,8 +8,12 @@ $id = (int) request_value('id', 0);
 $userId = (int) request_value('user_id', 0);
 
 $employee = fetch_one(
-    'SELECT u.id, u.jabatan, COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat
+    'SELECT u.id,
+            u.jabatan,
+            COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat,
+            COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit
      FROM users u
+     JOIN units un ON un.id = u.unit_id
      LEFT JOIN master_gaji mg ON mg.user_id = u.id
      WHERE u.id = :id AND u.unit_id = :unit_id AND u.role != :role
      LIMIT 1',
@@ -22,28 +26,15 @@ if (!$employee) {
 
 $jamMasuk = request_value('jam_masuk') !== '' ? request_value('jam_masuk') . ':00' : null;
 $jamKeluar = request_value('jam_keluar') !== '' ? request_value('jam_keluar') . ':00' : null;
-$shift = request_value('shift') !== '' ? request_value('shift') : null;
-$jabatan = strtolower((string) ($employee['jabatan'] ?? ''));
-
-$jamMasukSah = match (true) {
-    $jabatan !== 'security' && $shift === '1' => '08:00:00',
-    $jabatan !== 'security' && $shift === '2' => '16:00:00',
-    $jabatan !== 'security' && $shift === '3' => '23:00:00',
-    $jabatan === 'security' && $shift === '1' => '07:00:00',
-    $jabatan === 'security' && $shift === '2' => '15:00:00',
-    $jabatan === 'security' && $shift === '3' => '00:00:00',
-    default => null,
-};
-
-$totalTerlambat = 0;
-if ($jamMasuk && $jamMasukSah) {
-    $actual = strtotime('1970-01-01 ' . $jamMasuk);
-    $target = strtotime('1970-01-01 ' . $jamMasukSah);
-    if ($actual !== false && $target !== false && $actual > $target) {
-        $totalTerlambat = (int) round(($actual - $target) / 60);
-    }
-}
-
+$shift = request_value('shift') !== '' ? (int) request_value('shift') : null;
+$status = (string) request_value('status');
+$totalTerlambat = AttendanceRules::calculateLateFromRecord(
+    $status,
+    $jamMasuk,
+    $shift,
+    (string) ($employee['jabatan'] ?? ''),
+    (int) ($employee['toleransi_terlambat_menit'] ?? 0)
+);
 $jumlahPotongan = $totalTerlambat * (int) round((float) ($employee['potongan_terlambat'] ?? 1000));
 
 if ($id > 0) {
@@ -84,7 +75,7 @@ if ($id > 0) {
             'user_id' => $userId,
             'tanggal' => request_value('tanggal'),
             'shift' => $shift,
-            'status' => request_value('status'),
+            'status' => $status,
             'jam_masuk' => $jamMasuk,
             'jam_keluar' => $jamKeluar,
             'total_menit_terlambat' => $totalTerlambat,
@@ -125,7 +116,7 @@ $inserted = execute_query(
         'user_id' => $userId,
         'tanggal' => request_value('tanggal'),
         'shift' => $shift,
-        'status' => request_value('status'),
+        'status' => $status,
         'jam_masuk' => $jamMasuk,
         'jam_keluar' => $jamKeluar,
         'total_menit_terlambat' => $totalTerlambat,

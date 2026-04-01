@@ -2,6 +2,14 @@
 
 require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
+$unitSettings = fetch_one(
+    'SELECT nama_unit, toleransi_terlambat_menit
+     FROM units
+     WHERE id = :id
+     LIMIT 1',
+    ['id' => $authUser['unit_id']]
+);
+$globalTolerance = (int) ($unitSettings['toleransi_terlambat_menit'] ?? 0);
 
 $totalUsers = (int) (fetch_one(
     'SELECT COUNT(*) AS total
@@ -25,11 +33,12 @@ $users = fetch_all(
     ['unit_id' => $authUser['unit_id']]
 );
 
-$renderUserForm = static function (array $item, string $modalId, int $unitId, bool $isCreate = false): string {
+$renderUserForm = static function (array $item, string $modalId, int $unitId, int $globalTolerance, bool $isCreate = false): string {
     $roleOptions = ['owner' => 'Owner', 'karyawan' => 'Karyawan'];
     $jenisKelaminOptions = ['Laki-laki' => 'Laki-laki', 'Perempuan' => 'Perempuan'];
     $agamaOptions = ['Islam' => 'Islam', 'Kristen' => 'Kristen', 'Katolik' => 'Katolik', 'Hindu' => 'Hindu', 'Buddha' => 'Buddha', 'Konghucu' => 'Konghucu'];
     $statusOptions = ['Belum Menikah' => 'Belum Menikah', 'Menikah' => 'Menikah', 'Cerai' => 'Cerai'];
+    $userTolerance = $item['toleransi_terlambat_menit'] ?? null;
 
     return '<form action="ajax/save_user.php" method="post" enctype="multipart/form-data" data-ajax-form class="grid gap-4 md:grid-cols-2">'
         . csrf_input()
@@ -40,6 +49,7 @@ $renderUserForm = static function (array $item, string $modalId, int $unitId, bo
         . ui_input('email', 'Email', $item['email'] ?? '', 'email', ['required' => 'required'])
         . ui_input('no_hp', 'Nomor HP', $item['no_hp'] ?? '', 'text')
         . ui_input('jabatan', 'Jabatan', $item['jabatan'] ?? '', 'text')
+        . ui_input('toleransi_terlambat_menit', 'Toleransi Telat (Menit)', $userTolerance === null || $userTolerance === '' ? '' : (string) $userTolerance, 'number', ['min' => '0', 'placeholder' => 'Kosong = pakai global'])
         . ui_input('tempat_lahir', 'Tempat Lahir', $item['tempat_lahir'] ?? '', 'text')
         . ui_input('tanggal_lahir', 'Tanggal Lahir', $item['tanggal_lahir'] ?? '', 'date')
         . ui_select('jenis_kelamin', 'Jenis Kelamin', $jenisKelaminOptions, $item['jenis_kelamin'] ?? '')
@@ -51,6 +61,7 @@ $renderUserForm = static function (array $item, string $modalId, int $unitId, bo
         . ui_input('tanggal_bergabung', 'Tanggal Bergabung', $item['tanggal_bergabung'] ?? '', 'date')
         . ui_input('foto', 'Foto', '', 'file', ['accept' => 'image/*'])
         . ui_input('password', $isCreate ? 'Password' : 'Password Baru', '', 'password', $isCreate ? ['required' => 'required'] : [])
+        . '<div class="md:col-span-2 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">Kosongkan toleransi per user untuk mengikuti setting global unit aktif: <strong>' . e((string) $globalTolerance) . ' menit</strong>.</div>'
         . '<div class="md:col-span-2">' . ui_textarea('alamat', 'Alamat', $item['alamat'] ?? '') . '</div>'
         . '<div class="md:col-span-2 flex justify-end">' . ui_button($isCreate ? 'Tambah User' : 'Simpan User', ['type' => 'submit', 'variant' => 'success']) . '</div>'
         . '</form>';
@@ -68,6 +79,10 @@ foreach ($users as $item) {
     $deleteModalId = 'user-delete-' . $item['id'];
     $foto = !empty($item['foto']) ? '<img src="' . e($item['foto']) . '" alt="' . e($item['name']) . '" class="h-12 w-12 rounded-2xl object-cover">' : '<div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-sm font-semibold text-slate-500">' . e(strtoupper(substr($item['name'], 0, 1))) . '</div>';
     $isCurrentUser = (int) $item['id'] === (int) $authUser['id'];
+    $hasUserTolerance = $item['toleransi_terlambat_menit'] !== null && $item['toleransi_terlambat_menit'] !== '';
+    $toleranceLabel = $hasUserTolerance
+        ? ((int) $item['toleransi_terlambat_menit']) . ' menit'
+        : 'Global (' . $globalTolerance . ' menit)';
     $selectCell = $isCurrentUser
         ? '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 opacity-40" disabled title="User yang sedang login tidak bisa dihapus">'
         : '<input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select>';
@@ -79,6 +94,7 @@ foreach ($users as $item) {
         <td class="px-4 py-3">' . e($item['email']) . '</td>
         <td class="px-4 py-3">' . e($item['no_hp'] ?: '-') . '</td>
         <td class="px-4 py-3">' . e($item['jabatan'] ?: '-') . '</td>
+        <td class="px-4 py-3">' . e($toleranceLabel) . '</td>
         <td class="px-4 py-3">' . e(ucfirst($item['role'])) . '</td>
         <td class="px-4 py-3">' . e($item['tanggal_bergabung'] ? format_date_id($item['tanggal_bergabung']) : '-') . '</td>
         <td class="px-4 py-3"><div class="flex flex-nowrap items-center gap-2">'
@@ -94,6 +110,7 @@ foreach ($users as $item) {
             'Email' => e($item['email']),
             'No. HP' => e($item['no_hp'] ?: '-'),
             'Jabatan' => e($item['jabatan'] ?: '-'),
+            'Toleransi Telat' => e($toleranceLabel),
             'Role' => e(ucfirst($item['role'])),
             'Tanggal Bergabung' => e($item['tanggal_bergabung'] ? format_date_id($item['tanggal_bergabung']) : '-'),
         ], 3)
@@ -120,11 +137,11 @@ foreach ($users as $item) {
         . '</div></form>';
 
     $modals .= ui_modal($viewModalId, 'Detail User', $viewBody, ['max_width' => 'max-w-5xl']);
-    $modals .= ui_modal($editModalId, 'Edit User', $renderUserForm($item, $editModalId, (int) $authUser['unit_id']));
+    $modals .= ui_modal($editModalId, 'Edit User', $renderUserForm($item, $editModalId, (int) $authUser['unit_id'], $globalTolerance));
     $modals .= ui_modal($deleteModalId, 'Hapus User', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
-$modals .= ui_modal($createModalId, 'Tambah User', $renderUserForm([], $createModalId, (int) $authUser['unit_id'], true), ['max_width' => 'max-w-5xl']);
+$modals .= ui_modal($createModalId, 'Tambah User', $renderUserForm([], $createModalId, (int) $authUser['unit_id'], $globalTolerance, true), ['max_width' => 'max-w-5xl']);
 
 $bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_user_bulk.php" method="post" data-ajax-form class="hidden">'
     . csrf_input()
@@ -138,8 +155,8 @@ echo ui_panel('Data User', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:
     . '</div>'
     . '</div>'
     . ui_table(
-        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], ['label' => 'Foto', 'sortable' => false], 'Nama', 'Email', 'No. HP', 'Jabatan', 'Role', 'Tanggal Bergabung', ['label' => 'Aksi', 'sortable' => false]],
-        $rows !== '' ? $rows : '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Belum ada user pada unit aktif.</td></tr>',
+        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], ['label' => 'Foto', 'sortable' => false], 'Nama', 'Email', 'No. HP', 'Jabatan', 'Tol. Telat', 'Role', 'Tanggal Bergabung', ['label' => 'Aksi', 'sortable' => false]],
+        $rows !== '' ? $rows : '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">Belum ada user pada unit aktif.</td></tr>',
         [
             'bulk_actions' => [
                 'form_id' => $bulkDeleteFormId,
@@ -153,7 +170,7 @@ echo ui_panel('Data User', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:
             'table_id' => $tableId,
         ]
     ) . $bulkDeleteForm,
-    ['subtitle' => 'Mirror halaman user lama dengan scope per unit aktif.']
+    ['subtitle' => 'Scope per unit aktif. Toleransi per user kosong berarti mengikuti setting global unit (' . $globalTolerance . ' menit).']
 );
 echo '</div>';
 echo $modals;

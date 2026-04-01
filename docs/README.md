@@ -25,6 +25,7 @@ Sistem baru:
 - Import absensi dan parsing file
 - Auto-create user dan `master_gaji` saat import bila belum ada
 - Hitung keterlambatan berbasis shift/jabatan
+- Setting toleransi keterlambatan global per unit dan override per user
 - Validasi master gaji
 - Generate penggajian otomatis per periode
 - Override payroll manual
@@ -59,8 +60,9 @@ Sistem baru:
 1. Buat file `.env` dari `.env.example`.
 2. Isi koneksi database ke schema `hark8423_gaji`.
 3. Import SQL `hark8423_gaji.sql` ke MySQL.
-4. Jalankan lewat web server PHP biasa, misalnya document root ke folder ini.
-5. Login memakai user yang ada pada tabel `users`.
+4. Jika database lama sudah terlanjur berjalan, jalankan `docs/update-toleransi-terlambat.sql`.
+5. Jalankan lewat web server PHP biasa, misalnya document root ke folder ini.
+6. Login memakai user yang ada pada tabel `users`.
 
 ## Deploy Shared Hosting cPanel
 
@@ -98,6 +100,7 @@ Sistem baru:
 ## Catatan Implementasi
 
 - Field `potongan_khusus` dipakai juga sebagai tempat override hutang manual agar tetap mengikuti struktur lama tanpa menambah tabel baru.
+- Toleransi keterlambatan memakai fallback `users.toleransi_terlambat_menit` lalu `units.toleransi_terlambat_menit`. Jika override user kosong, sistem memakai setting global unit aktif.
 - Formula payroll mengikuti logic project lama sejauh yang terwakili di schema SQL aktif.
 
 ## Belum Dimirror Sepenuhnya

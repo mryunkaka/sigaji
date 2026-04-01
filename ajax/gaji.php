@@ -240,7 +240,7 @@ $bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_p
 $rangeLabel = format_date_id($startDate) . ' - ' . format_date_id($endDate);
 
 echo '<div class="space-y-6">';
-echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Default periode closing aktif: ' . $rangeLabel . '. Tanggal bisa diubah secara custom.']);
+echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Default periode closing terakhir selesai: ' . $rangeLabel . '. Tanggal bisa diubah secara custom.']);
 echo ui_panel('Generate Penggajian', $generateInfo . '<div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Generate payroll untuk rentang ' . $rangeLabel . '. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate pada rentang ini.']);
 echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Hanya periode payroll yang sudah digenerate pada filter aktif yang bisa dicetak.']);
 echo ui_panel('Daftar Penggajian', ui_table(
