@@ -11,8 +11,13 @@ $ownedIds = [];
 
 if ($selectionMode === 'all_filtered') {
     $search = trim((string) ($selectionParams['search'] ?? ''));
-    $startDate = (string) ($selectionParams['start_date'] ?? '');
-    $endDate = (string) ($selectionParams['end_date'] ?? '');
+    $month = (int) ($selectionParams['month'] ?? 0);
+    $year = (int) ($selectionParams['year'] ?? 0);
+    $period = ($month >= 1 && $month <= 12 && $year >= 2000)
+        ? closing_period_range_from_month_year($month, $year)
+        : closing_period_filter_state();
+    $startDate = (string) $period['start'];
+    $endDate = (string) $period['end'];
     $searchSql = '';
     $params = [
         'unit_id' => $user['unit_id'],

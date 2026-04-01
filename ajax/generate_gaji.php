@@ -4,12 +4,16 @@ require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 verify_csrf();
 
-$tanggalAwal = request_value('tanggal_awal');
-$tanggalAkhir = request_value('tanggal_akhir');
+$month = (int) request_value('month', 0);
+$year = (int) request_value('year', 0);
 
-if (!$tanggalAwal || !$tanggalAkhir) {
-    json_response(['success' => false, 'message' => 'Tanggal awal dan akhir wajib diisi.'], 422);
+if ($month < 1 || $month > 12 || $year < 2000) {
+    json_response(['success' => false, 'message' => 'Bulan dan tahun periode wajib diisi.'], 422);
 }
+
+$period = closing_period_range_from_month_year($month, $year);
+$tanggalAwal = $period['start'];
+$tanggalAkhir = $period['end'];
 
 $users = fetch_all(
     'SELECT * FROM users WHERE unit_id = :unit_id AND role != "owner" ORDER BY name',
@@ -77,4 +81,10 @@ json_response([
     'success' => true,
     'message' => "Generate penggajian selesai untuk {$processed} karyawan.",
     'reloadSection' => 'gaji',
+    'reloadParams' => [
+        'month' => (string) $month,
+        'year' => (string) $year,
+        'generate_year' => (string) $year,
+        'generate_month' => (string) $month,
+    ],
 ]);

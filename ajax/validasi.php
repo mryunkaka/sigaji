@@ -12,7 +12,7 @@ $totalMasters = (int) (fetch_one(
 )['total'] ?? 0);
 
 $masters = fetch_all(
-    'SELECT mg.*, u.name, u.jabatan
+    'SELECT mg.*, u.name, u.jabatan, u.kode_absensi
      FROM master_gaji mg
      JOIN users u ON u.id = mg.user_id
      WHERE u.unit_id = :unit_id AND u.role != "owner"
@@ -29,7 +29,7 @@ $totalPayrolls = (int) (fetch_one(
 )['total'] ?? 0);
 
 $payrolls = fetch_all(
-    'SELECT p.*, u.name
+    'SELECT p.*, u.name, u.kode_absensi
      FROM penggajian p
      JOIN users u ON u.id = p.user_id
      WHERE u.unit_id = :unit_id
@@ -49,7 +49,7 @@ foreach ($masters as $item) {
     $deleteModalId = 'master-delete-' . $item['id'];
     $masterRows .= '<tr>
         <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
-        <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
+        <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e($item['jabatan'] ?: '-') . '</td>
         <td class="px-4 py-3">' . money($item['gaji_pokok']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_terlambat']) . '/menit</td>
@@ -117,7 +117,7 @@ foreach ($payrolls as $item) {
     $deleteModalId = 'payroll-delete-' . $item['id'];
     $payrollRows .= '<tr>
         <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
-        <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
+        <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_pokok']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_terlambat']) . '</td>

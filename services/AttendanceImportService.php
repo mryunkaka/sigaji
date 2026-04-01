@@ -1,14 +1,27 @@
 <?php
 
-final class AttendanceImportService
+final class AttendanceImportConflictException extends RuntimeException
 {
-    public static function importUploadedFile(string $temporaryPath, string $originalName, int $unitId): array
+    public function __construct(private array $conflict)
     {
-        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        return self::import($temporaryPath, $unitId, $extension);
+        parent::__construct((string) ($conflict['message'] ?? 'Konflik kode absensi ditemukan.'));
     }
 
-    public static function import(string $uploadedPath, int $unitId, ?string $extension = null): array
+    public function conflict(): array
+    {
+        return $this->conflict;
+    }
+}
+
+final class AttendanceImportService
+{
+    public static function importUploadedFile(string $temporaryPath, string $originalName, int $unitId, array $options = []): array
+    {
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        return self::import($temporaryPath, $unitId, $extension, $options);
+    }
+
+    public static function import(string $uploadedPath, int $unitId, ?string $extension = null, array $options = []): array
     {
         $ext = strtolower($extension ?: pathinfo($uploadedPath, PATHINFO_EXTENSION));
         $rows = match ($ext) {
@@ -19,6 +32,23 @@ final class AttendanceImportService
 
         if (count($rows) <= 1) {
             throw new RuntimeException('File absensi tidak berisi data.');
+        }
+
+        foreach ($rows as $index => $row) {
+            if ($index === 0) {
+                continue;
+            }
+
+            $rowNumber = $index + 1;
+            $nama = trim(preg_replace('/\s+/', ' ', strtoupper((string) ($row[1] ?? ''))));
+            $tanggal = self::parseDateValue($row[3] ?? null);
+            if ($nama === '' || !$tanggal) {
+                continue;
+            }
+
+            if (self::normalizeAttendanceCode($row[0] ?? '') === null) {
+                throw new RuntimeException("Baris {$rowNumber}: KODE FINGER wajib diisi. Import dibatalkan dan tidak ada data yang disimpan.");
+            }
         }
 
         $summary = [
@@ -40,6 +70,7 @@ final class AttendanceImportService
             $rowNumber = $index + 1;
 
             try {
+                $kodeAbsensi = self::normalizeAttendanceCode($row[0] ?? '');
                 $nama = trim(preg_replace('/\s+/', ' ', strtoupper((string) ($row[1] ?? ''))));
                 $jabatan = strtolower(trim((string) ($row[2] ?? '')));
                 $tanggal = self::parseDateValue($row[3] ?? null);
@@ -61,58 +92,21 @@ final class AttendanceImportService
                     $summary['date_range']['end'] = $tanggal;
                 }
 
-                $user = fetch_one(
-                    'SELECT u.*,
-                            COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit_efektif
-                     FROM users u
-                     JOIN units un ON un.id = u.unit_id
-                     WHERE u.unit_id = :unit_id AND u.name = :name
-                     LIMIT 1',
-                    [
-                        'unit_id' => $unitId,
-                        'name' => $nama,
-                    ]
-                );
-
-                if (!$user) {
-                    $email = self::generateUniqueEmail($nama, $unitId);
-                    execute_query(
-                        'INSERT INTO users (name, email, password, jabatan, role, unit_id, tanggal_bergabung, created_at, updated_at)
-                         VALUES (:name, :email, :password, :jabatan, :role, :unit_id, :tanggal_bergabung, :created_at, :updated_at)',
-                        [
-                            'name' => $nama,
-                            'email' => $email,
-                            'password' => password_hash('password', PASSWORD_BCRYPT),
-                            'jabatan' => $jabatan,
-                            'role' => 'karyawan',
-                            'unit_id' => $unitId,
-                            'tanggal_bergabung' => date('Y-m-d'),
-                            'created_at' => now_string(),
-                            'updated_at' => now_string(),
-                        ]
-                    );
-                    $user = fetch_one(
-                        'SELECT u.*,
-                                COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit_efektif
-                         FROM users u
-                         JOIN units un ON un.id = u.unit_id
-                         WHERE u.email = :email
-                         LIMIT 1',
-                        ['email' => $email]
-                    );
-                }
+                $user = self::resolveImportUser($unitId, $nama, $jabatan, $kodeAbsensi, $options);
 
                 PayrollService::ensureMasterGaji((int) $user['id']);
 
                 $status = self::determineStatus($jamMasukRaw, $jamKeluarRaw, $shift);
                 $jamMasuk = $status === 'hadir' ? self::parseTimeValue($jamMasukRaw) : null;
                 $jamKeluar = $status === 'hadir' ? self::parseTimeValue($jamKeluarRaw) : null;
+                $shiftContext = ShiftService::resolveEmployeeShiftContext($user, $shift);
                 $totalTerlambat = AttendanceRules::calculateLateFromRecord(
                     $status,
                     $jamMasuk,
                     $shift,
                     $jabatan,
-                    (int) ($user['toleransi_terlambat_menit_efektif'] ?? 0)
+                    (int) ($user['toleransi_terlambat_menit_efektif'] ?? 0),
+                    $shiftContext['scheduled_jam_masuk'] ?? null
                 );
 
                 $master = PayrollService::ensureMasterGaji((int) $user['id']);
@@ -189,6 +183,8 @@ final class AttendanceImportService
                 );
 
                 $summary['imported']++;
+            } catch (AttendanceImportConflictException $e) {
+                throw $e;
             } catch (Throwable $e) {
                 $summary['skipped']++;
                 $summary['errors'][] = "Baris {$rowNumber}: " . $e->getMessage();
@@ -367,7 +363,7 @@ final class AttendanceImportService
             return strtolower($keluarUpper);
         }
 
-        if (!in_array($shift, [1, 2, 3], true) && $jamMasuk === '' && $jamKeluar === '') {
+        if (($shift === null || $shift <= 0) && $jamMasuk === '' && $jamKeluar === '') {
             return 'off';
         }
 
@@ -392,5 +388,174 @@ final class AttendanceImportService
         }
 
         return "{$base}.u{$unitId}." . bin2hex(random_bytes(3)) . '@example.com';
+    }
+
+    private static function normalizeAttendanceCode($value): ?string
+    {
+        $normalized = strtoupper(trim((string) $value));
+        return $normalized === '' ? null : preg_replace('/\s+/', '', $normalized);
+    }
+
+    private static function fetchImportUserByCode(int $unitId, string $code): ?array
+    {
+        return fetch_one(
+            'SELECT u.*,
+                    COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit_efektif
+             FROM users u
+             JOIN units un ON un.id = u.unit_id
+             WHERE u.unit_id = :unit_id
+               AND u.kode_absensi = :kode_absensi
+             LIMIT 1',
+            [
+                'unit_id' => $unitId,
+                'kode_absensi' => $code,
+            ]
+        );
+    }
+
+    private static function fetchImportUserByName(int $unitId, string $name): ?array
+    {
+        return fetch_one(
+            'SELECT u.*,
+                    COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit_efektif
+             FROM users u
+             JOIN units un ON un.id = u.unit_id
+             WHERE u.unit_id = :unit_id
+               AND UPPER(TRIM(u.name)) = :name
+             ORDER BY CASE WHEN u.tanggal_resign IS NULL THEN 0 ELSE 1 END, u.id DESC
+             LIMIT 1',
+            [
+                'unit_id' => $unitId,
+                'name' => strtoupper(trim($name)),
+            ]
+        );
+    }
+
+    private static function createImportedUser(int $unitId, string $name, string $jabatan, ?string $kodeAbsensi): array
+    {
+        $email = self::generateUniqueEmail($name, $unitId);
+        execute_query(
+            'INSERT INTO users (name, email, password, jabatan, role, unit_id, kode_absensi, tanggal_bergabung, created_at, updated_at)
+             VALUES (:name, :email, :password, :jabatan, :role, :unit_id, :kode_absensi, :tanggal_bergabung, :created_at, :updated_at)',
+            [
+                'name' => $name,
+                'email' => $email,
+                'password' => password_hash('password', PASSWORD_BCRYPT),
+                'jabatan' => $jabatan,
+                'role' => 'karyawan',
+                'unit_id' => $unitId,
+                'kode_absensi' => $kodeAbsensi,
+                'tanggal_bergabung' => date('Y-m-d'),
+                'created_at' => now_string(),
+                'updated_at' => now_string(),
+            ]
+        );
+
+        return self::fetchImportUserByEmail($email) ?? throw new RuntimeException('User hasil import gagal ditemukan.');
+    }
+
+    private static function fetchImportUserByEmail(string $email): ?array
+    {
+        return fetch_one(
+            'SELECT u.*,
+                    COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit_efektif
+             FROM users u
+             JOIN units un ON un.id = u.unit_id
+             WHERE u.email = :email
+             LIMIT 1',
+            ['email' => $email]
+        );
+    }
+
+    private static function resolveImportUser(int $unitId, string $name, string $jabatan, ?string $kodeAbsensi, array $options): array
+    {
+        $existingByCode = $kodeAbsensi !== null ? self::fetchImportUserByCode($unitId, $kodeAbsensi) : null;
+        if ($existingByCode) {
+            $existingName = strtoupper(trim((string) ($existingByCode['name'] ?? '')));
+            if ($existingName !== strtoupper(trim($name))) {
+                if (empty($options['allow_code_takeover'])) {
+                    throw new AttendanceImportConflictException([
+                        'code' => $kodeAbsensi,
+                        'existing_name' => (string) ($existingByCode['name'] ?? ''),
+                        'import_name' => $name,
+                        'message' => 'Kode absensi ini telah ada di database untuk nama ' . ($existingByCode['name'] ?? '-') . '. Jika dilanjutkan, user lama akan ditandai resign per hari ini dan kode dipindahkan ke ' . $name . '.',
+                    ]);
+                }
+
+                execute_query(
+                    'UPDATE users
+                     SET kode_absensi = NULL,
+                         tanggal_resign = :tanggal_resign,
+                         updated_at = :updated_at
+                     WHERE id = :id',
+                    [
+                        'tanggal_resign' => date('Y-m-d'),
+                        'updated_at' => now_string(),
+                        'id' => $existingByCode['id'],
+                    ]
+                );
+
+                $targetUser = self::fetchImportUserByName($unitId, $name);
+                if (!$targetUser) {
+                    return self::createImportedUser($unitId, $name, $jabatan, $kodeAbsensi);
+                }
+
+                execute_query(
+                    'UPDATE users
+                     SET kode_absensi = :kode_absensi,
+                         jabatan = :jabatan,
+                         tanggal_resign = NULL,
+                         updated_at = :updated_at
+                     WHERE id = :id',
+                    [
+                        'kode_absensi' => $kodeAbsensi,
+                        'jabatan' => $jabatan !== '' ? $jabatan : ($targetUser['jabatan'] ?? ''),
+                        'updated_at' => now_string(),
+                        'id' => $targetUser['id'],
+                    ]
+                );
+
+                return self::fetchImportUserByName($unitId, $name) ?? throw new RuntimeException('User tujuan takeover gagal ditemukan.');
+            }
+
+            if (($existingByCode['jabatan'] ?? '') !== $jabatan && $jabatan !== '') {
+                execute_query(
+                    'UPDATE users SET jabatan = :jabatan, updated_at = :updated_at WHERE id = :id',
+                    [
+                        'jabatan' => $jabatan,
+                        'updated_at' => now_string(),
+                        'id' => $existingByCode['id'],
+                    ]
+                );
+                return self::fetchImportUserByCode($unitId, $kodeAbsensi) ?? $existingByCode;
+            }
+
+            return $existingByCode;
+        }
+
+        $existingByName = self::fetchImportUserByName($unitId, $name);
+        if ($existingByName) {
+            if ($kodeAbsensi !== null && ($existingByName['kode_absensi'] ?? null) !== $kodeAbsensi) {
+                execute_query(
+                    'UPDATE users
+                     SET kode_absensi = :kode_absensi,
+                         jabatan = :jabatan,
+                         tanggal_resign = NULL,
+                         updated_at = :updated_at
+                     WHERE id = :id',
+                    [
+                        'kode_absensi' => $kodeAbsensi,
+                        'jabatan' => $jabatan !== '' ? $jabatan : ($existingByName['jabatan'] ?? ''),
+                        'updated_at' => now_string(),
+                        'id' => $existingByName['id'],
+                    ]
+                );
+                return self::fetchImportUserByName($unitId, $name) ?? $existingByName;
+            }
+
+            return $existingByName;
+        }
+
+        return self::createImportedUser($unitId, $name, $jabatan, $kodeAbsensi);
     }
 }

@@ -2,16 +2,16 @@
 
 final class AttendanceRules
 {
-    public static function calculateLateFromRecord(?string $status, ?string $jamMasuk, ?int $shift, ?string $jabatan, ?int $toleranceMinutes = 0): int
+    public static function calculateLateFromRecord(?string $status, ?string $jamMasuk, ?int $shift, ?string $jabatan, ?int $toleranceMinutes = 0, ?string $scheduledJamMasuk = null): int
     {
         if (strtolower(trim((string) $status)) !== 'hadir') {
             return 0;
         }
 
-        return self::calculateLateMinutes($jamMasuk, $shift, $jabatan, $toleranceMinutes);
+        return self::calculateLateMinutes($jamMasuk, $shift, $jabatan, $toleranceMinutes, $scheduledJamMasuk);
     }
 
-    public static function calculateLateMinutes(?string $jamMasuk, ?int $shift, ?string $jabatan, ?int $toleranceMinutes = 0): int
+    public static function calculateLateMinutes(?string $jamMasuk, ?int $shift, ?string $jabatan, ?int $toleranceMinutes = 0, ?string $scheduledJamMasuk = null): int
     {
         if (!$jamMasuk || !$shift) {
             return 0;
@@ -26,6 +26,18 @@ final class AttendanceRules
         $arrival = ($hour * 60) + $minute;
         $role = strtolower(trim((string) $jabatan));
         $tolerance = max(0, (int) $toleranceMinutes);
+        $scheduledTarget = self::parseHourMinute((string) $scheduledJamMasuk);
+
+        if ($scheduledTarget !== null) {
+            [$scheduledHour, $scheduledMinute] = $scheduledTarget;
+            $target = ($scheduledHour * 60) + $scheduledMinute;
+
+            if ($target >= (18 * 60) && $arrival < (12 * 60)) {
+                $arrival += 1440;
+            }
+
+            return max(0, $arrival - ($target + $tolerance));
+        }
 
         if ($role === 'security') {
             $target = match ($shift) {

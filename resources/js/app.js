@@ -2,7 +2,7 @@
   const STORAGE_KEY = 'sigaji.active.section';
   const PARAMS_KEY = 'sigaji.section.params';
   const PARAMS_MIGRATION_KEY = 'sigaji.section.params.migration';
-  const PARAMS_MIGRATION_VERSION = 'closing-period-26-25-v2';
+  const PARAMS_MIGRATION_VERSION = 'closing-period-26-25-v3';
   const TABLE_STATE_KEY = 'sigaji.table.state';
   const SIDEBAR_KEY = 'sigaji.sidebar.open';
   const CLOSING_PERIOD_SECTIONS = ['dashboard', 'absensi', 'gaji'];
@@ -295,6 +295,7 @@
   };
 
   const formatNumber = (value) => new Intl.NumberFormat('id-ID').format(value);
+  const normalizeSearchText = (value) => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
   const recalculatePayrollForm = (form) => {
     if (!form) {
@@ -360,7 +361,16 @@
     return { hour, minute };
   };
 
-  const calculateAttendanceLateMinutes = ({ status, jamMasuk, shift, jabatan, toleranceMinutes }) => {
+  const parseShiftRules = (value) => {
+    try {
+      const parsed = JSON.parse(String(value || '{}'));
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  };
+
+  const calculateAttendanceLateMinutes = ({ status, jamMasuk, shift, jabatan, toleranceMinutes, scheduledJamMasuk }) => {
     if (normalizeAttendanceValue(status) !== 'hadir' || !jamMasuk || !shift) {
       return 0;
     }
@@ -374,6 +384,15 @@
     let arrival = (hour * 60) + minute;
     const role = normalizeAttendanceValue(jabatan);
     const tolerance = Math.max(0, Number(toleranceMinutes || 0));
+    const scheduledTime = parseAttendanceTime(scheduledJamMasuk);
+
+    if (scheduledTime) {
+      let target = (scheduledTime.hour * 60) + scheduledTime.minute;
+      if (target >= (18 * 60) && arrival < (12 * 60)) {
+        arrival += 1440;
+      }
+      return Math.max(0, arrival - (target + tolerance));
+    }
 
     if (role === 'security') {
       let target = null;
@@ -428,6 +447,42 @@
     }
 
     return Math.max(0, arrival - (target + tolerance));
+  };
+
+  const applyAttendanceDefaults = (form, selectedOption) => {
+    if (!form || !selectedOption || !selectedOption.value) {
+      return;
+    }
+
+    const shiftField = form.querySelector('[name="shift"]');
+    const jamMasukField = form.querySelector('[name="jam_masuk"]');
+    const jamKeluarField = form.querySelector('[name="jam_keluar"]');
+    const defaultShift = String(selectedOption.dataset.defaultShift || '');
+    const defaultJamMasuk = String(selectedOption.dataset.defaultJamMasuk || '');
+    const defaultJamKeluar = String(selectedOption.dataset.defaultJamKeluar || '');
+    const shiftRules = parseShiftRules(selectedOption.dataset.shiftRules || '{}');
+    const selectedShift = String(shiftField?.value || defaultShift || '');
+    const matchedRule = shiftRules[selectedShift] || null;
+
+    if (shiftField && defaultShift && shiftField.value === '') {
+      shiftField.value = defaultShift;
+    }
+
+    if (jamMasukField) {
+      const nextJamMasuk = matchedRule?.jam_masuk || defaultJamMasuk;
+      if (nextJamMasuk && (jamMasukField.value === '' || jamMasukField.dataset.autoFilled === 'true')) {
+        jamMasukField.value = nextJamMasuk;
+        jamMasukField.dataset.autoFilled = 'true';
+      }
+    }
+
+    if (jamKeluarField) {
+      const nextJamKeluar = matchedRule?.jam_keluar || defaultJamKeluar;
+      if (nextJamKeluar && (jamKeluarField.value === '' || jamKeluarField.dataset.autoFilled === 'true')) {
+        jamKeluarField.value = nextJamKeluar;
+        jamKeluarField.dataset.autoFilled = 'true';
+      }
+    }
   };
 
   const setTableLoaderState = (wrapper, loading) => {
@@ -526,6 +581,8 @@
 
     const updateSelectionUI = () => {
       const selectedCount = getSelectedCount();
+      const visibleCount = getVisibleCheckboxes().length;
+      const hasMoreFilteredResults = currentFilteredCount > visibleCount;
 
       if (selectionBar) {
         selectionBar.classList.toggle('hidden', selectedCount === 0);
@@ -537,7 +594,7 @@
         selectAllCount.textContent = formatNumber(currentFilteredCount);
       }
       if (selectAllResultsButton) {
-        const shouldShowSelectAll = serverSection !== '' && !selectionState.allFiltered && selectedCount > 0 && currentFilteredCount > selectedCount;
+        const shouldShowSelectAll = !selectionState.allFiltered && selectedCount > 0 && hasMoreFilteredResults;
         selectAllResultsButton.classList.toggle('hidden', !shouldShowSelectAll);
       }
       if (clearSelectionButton) {
@@ -604,7 +661,12 @@
       const excludedIds = ensureInput('excluded_ids');
 
       if (selectionState.allFiltered) {
-        const params = { ...serverParams, search: searchInput?.value || serverParams.search || '' };
+        const activeSectionParams = getSectionParams(currentSection) || {};
+        const params = {
+          ...activeSectionParams,
+          ...serverParams,
+          search: searchInput?.value || serverParams.search || activeSectionParams.search || '',
+        };
         idsInput.value = '';
         selectionMode.value = 'all_filtered';
         selectionParams.value = JSON.stringify(params);
@@ -693,13 +755,16 @@
     };
 
     const render = () => {
-      const query = (searchInput?.value || '').toLowerCase().trim();
+      const rawQuery = searchInput?.value || '';
+      const query = normalizeSearchText(rawQuery);
+      const exactQuery = /\s$/.test(rawQuery);
       let filteredRows = allRows.filter((row) => {
         if (!query) {
           return true;
         }
         const cell = row.children[searchColumn];
-        return (cell?.textContent || '').toLowerCase().includes(query);
+        const cellText = normalizeSearchText(cell?.dataset.searchText || cell?.textContent || '');
+        return exactQuery ? cellText === query : cellText.includes(query);
       });
 
       if (sortIndex !== null) {
@@ -993,6 +1058,12 @@
         return;
       }
 
+      if (result.confirmImportConflict) {
+        hideProgressOverlay();
+        resolve(result);
+        return;
+      }
+
       if (xhr.status < 200 || xhr.status >= 300 || !result.success) {
         if (handleUnauthenticated(result)) {
           return;
@@ -1168,6 +1239,39 @@
       return;
     }
 
+    if (result.confirmImportConflict) {
+      const confirmed = window.confirm(result.confirmImportConflict.message || 'Kode absensi ini sudah ada di database. Lanjutkan?');
+      if (!confirmed) {
+        showToast('Import dibatalkan.', 'error');
+        return;
+      }
+
+      const retryForm = new FormData();
+      retryForm.append('_csrf', document.querySelector('meta[name="csrf-token"]')?.content || '');
+      retryForm.append('import_token', result.confirmImportConflict.token || '');
+      retryForm.append('allow_code_takeover', '1');
+
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: retryForm,
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        result = parseJsonResponse(await response.text());
+        if (handleUnauthenticated(result)) {
+          return;
+        }
+      } catch (error) {
+        showToast(error.message, 'error');
+        return;
+      }
+    }
+
     showToast(result.message, result.success ? 'success' : 'error');
     if (result.success) {
       const clearSelectionTarget = form.dataset.clearSelectionTarget || '';
@@ -1256,6 +1360,58 @@
       return;
     }
 
+    const repeatableAdd = event.target.closest('[data-repeatable-add]');
+    if (repeatableAdd) {
+      const table = repeatableAdd.closest('[data-repeatable-table]');
+      const body = table?.querySelector('[data-repeatable-body]');
+      const template = table?.querySelector('[data-repeatable-template]');
+      if (!body || !template) {
+        return;
+      }
+
+      body.insertAdjacentHTML('beforeend', template.innerHTML);
+      return;
+    }
+
+    const repeatableRemove = event.target.closest('[data-repeatable-remove]');
+    if (repeatableRemove) {
+      const row = repeatableRemove.closest('[data-repeatable-row]');
+      const body = row?.parentElement;
+      const rowCount = body ? body.querySelectorAll('[data-repeatable-row]').length : 0;
+      if (!row || !body) {
+        return;
+      }
+
+      if (rowCount <= 1) {
+        row.querySelectorAll('input, select, textarea').forEach((field) => {
+          field.value = '';
+        });
+        return;
+      }
+
+      row.remove();
+      return;
+    }
+
+    const generateMonthOption = event.target.closest('[data-generate-month-option]');
+    if (generateMonthOption) {
+      const picker = generateMonthOption.closest('[data-generate-month-picker]');
+      const form = generateMonthOption.closest('form');
+      const input = form?.querySelector('[data-generate-month-input]');
+      if (!picker || !input) {
+        return;
+      }
+
+      input.value = generateMonthOption.dataset.generateMonthOption || '';
+      picker.querySelectorAll('[data-generate-month-option]').forEach((button) => {
+        button.classList.remove('border-emerald-400', 'bg-emerald-50', 'ring-4', 'ring-emerald-100');
+        button.classList.add('border-slate-200', 'bg-white');
+      });
+      generateMonthOption.classList.remove('border-slate-200', 'bg-white');
+      generateMonthOption.classList.add('border-emerald-400', 'bg-emerald-50', 'ring-4', 'ring-emerald-100');
+      return;
+    }
+
     const closeModal = event.target.closest('[data-close-modal]');
     if (closeModal) {
       closeModalById(closeModal.dataset.closeModal);
@@ -1324,6 +1480,14 @@
       form.dataset.dirty = 'true';
     }
 
+    if (event.target.matches('[data-force-uppercase]')) {
+      event.target.value = String(event.target.value || '').toUpperCase();
+    }
+
+    if (event.target.matches('[name="jam_masuk"], [name="jam_keluar"]')) {
+      event.target.dataset.autoFilled = 'false';
+    }
+
     const payrollField = event.target.closest('[data-payroll-calc]');
     if (payrollField) {
       recalculatePayrollForm(payrollField.closest('[data-payroll-form]'));
@@ -1331,6 +1495,20 @@
   });
 
   document.addEventListener('change', (event) => {
+    const sectionLoadOnChange = event.target.closest('[data-section-load-on-change]');
+    if (sectionLoadOnChange) {
+      const section = sectionLoadOnChange.dataset.sectionLoadOnChange || currentSection;
+      const paramName = sectionLoadOnChange.dataset.sectionLoadParam || sectionLoadOnChange.name;
+      if (paramName) {
+        const nextParams = {
+          ...(getSectionParams(section) || {}),
+          [paramName]: sectionLoadOnChange.value,
+        };
+        loadSection(section, nextParams);
+        return;
+      }
+    }
+
     const payrollField = event.target.closest('[data-payroll-calc]');
     if (payrollField) {
       recalculatePayrollForm(payrollField.closest('[data-payroll-form]'));
@@ -1347,9 +1525,11 @@
     }
 
     const userSelect = form.querySelector('[name="user_id"]');
+    const shiftField = form.querySelector('[name="shift"]');
+    const jamMasukField = form.querySelector('[name="jam_masuk"]');
     const status = form.querySelector('[name="status"]')?.value || '';
-    const shift = form.querySelector('[name="shift"]')?.value || '';
-    const jamMasuk = form.querySelector('[name="jam_masuk"]')?.value || '';
+    const shift = shiftField?.value || '';
+    const jamMasuk = jamMasukField?.value || '';
     const totalField = form.querySelector('[name="total_menit_terlambat"]');
     const jumlahField = form.querySelector('[name="jumlah_potongan"]');
 
@@ -1364,15 +1544,22 @@
       return;
     }
 
+    if (trigger === userSelect || trigger === shiftField) {
+      applyAttendanceDefaults(form, selectedOption);
+    }
+
     const jabatan = (selectedOption?.dataset.jabatan || '').toLowerCase();
     const potonganTerlambat = Number(selectedOption?.dataset.potonganTerlambat || 1000);
     const toleransiTerlambat = Number(selectedOption?.dataset.toleransiTerlambat || 0);
+    const shiftRules = parseShiftRules(selectedOption?.dataset.shiftRules || '{}');
+    const scheduledJamMasuk = shiftRules[String(shiftField?.value || '')]?.jam_masuk || selectedOption?.dataset.defaultJamMasuk || '';
     const totalMenit = calculateAttendanceLateMinutes({
       status,
-      jamMasuk,
-      shift,
+      jamMasuk: jamMasukField?.value || '',
+      shift: shiftField?.value || '',
       jabatan,
       toleranceMinutes: toleransiTerlambat,
+      scheduledJamMasuk,
     });
 
     totalField.value = String(totalMenit);

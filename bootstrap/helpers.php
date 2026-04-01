@@ -102,26 +102,144 @@ function closing_period_range(?DateTimeInterface $reference = null): array
         $base = DateTimeImmutable::createFromInterface($base);
     }
 
-    $closingEndBase = ((int) $base->format('d') >= 26)
+    $settings = closing_period_unit_settings();
+    $endDay = $settings['end_day'];
+    $closingEndBase = ((int) $base->format('d') > $endDay)
         ? $base->modify('first day of this month')
         : $base->modify('first day of last month');
+    return closing_period_range_from_month_year(
+        (int) $closingEndBase->format('n'),
+        (int) $closingEndBase->format('Y')
+    );
+}
 
-    $end = $closingEndBase->setDate(
-        (int) $closingEndBase->format('Y'),
-        (int) $closingEndBase->format('m'),
-        25
+function month_options_id(): array
+{
+    return [
+        '1' => 'Januari',
+        '2' => 'Februari',
+        '3' => 'Maret',
+        '4' => 'April',
+        '5' => 'Mei',
+        '6' => 'Juni',
+        '7' => 'Juli',
+        '8' => 'Agustus',
+        '9' => 'September',
+        '10' => 'Oktober',
+        '11' => 'November',
+        '12' => 'Desember',
+    ];
+}
+
+function closing_period_unit_settings(?int $unitId = null): array
+{
+    static $cache = [];
+
+    $resolvedUnitId = $unitId ?? Auth::unitId();
+    $cacheKey = $resolvedUnitId === null ? 'default' : (string) $resolvedUnitId;
+    if (isset($cache[$cacheKey])) {
+        return $cache[$cacheKey];
+    }
+
+    $settings = [
+        'start_day' => 26,
+        'end_day' => 25,
+    ];
+
+    if ($resolvedUnitId !== null) {
+        try {
+            $unit = fetch_one(
+                'SELECT hari_mulai_periode, hari_akhir_periode
+                 FROM units
+                 WHERE id = :id
+                 LIMIT 1',
+                ['id' => $resolvedUnitId]
+            );
+
+            if ($unit) {
+                $startDay = (int) ($unit['hari_mulai_periode'] ?? 26);
+                $endDay = (int) ($unit['hari_akhir_periode'] ?? 25);
+                if ($startDay >= 1 && $startDay <= 31) {
+                    $settings['start_day'] = $startDay;
+                }
+                if ($endDay >= 1 && $endDay <= 31) {
+                    $settings['end_day'] = $endDay;
+                }
+            }
+        } catch (Throwable $exception) {
+            // Fallback to hardcoded defaults when migration has not been applied yet.
+        }
+    }
+
+    $cache[$cacheKey] = $settings;
+    return $settings;
+}
+
+function closing_period_range_from_month_year(int $month, int $year, ?int $unitId = null): array
+{
+    $month = max(1, min(12, $month));
+    $year = max(2000, min(2100, $year));
+    $settings = closing_period_unit_settings($unitId);
+    $startDay = $settings['start_day'];
+    $endDay = $settings['end_day'];
+
+    $endBase = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+    $endDay = min($endDay, (int) $endBase->format('t'));
+    $end = $endBase->setDate(
+        (int) $endBase->format('Y'),
+        (int) $endBase->format('m'),
+        $endDay
     );
 
-    $closingStartBase = $end->modify('first day of last month');
-    $start = $closingStartBase->setDate(
-        (int) $closingStartBase->format('Y'),
-        (int) $closingStartBase->format('m'),
-        26
+    $startBase = $end->modify('first day of last month');
+    $startDay = min($startDay, (int) $startBase->format('t'));
+    $start = $startBase->setDate(
+        (int) $startBase->format('Y'),
+        (int) $startBase->format('m'),
+        $startDay
     );
 
     return [
+        'month' => $month,
+        'year' => $year,
         'start' => $start->format('Y-m-d'),
         'end' => $end->format('Y-m-d'),
+    ];
+}
+
+function closing_period_filter_state(?DateTimeInterface $reference = null, int $yearSpan = 5): array
+{
+    $defaultRange = closing_period_range($reference);
+    $defaultEnd = new DateTimeImmutable($defaultRange['end']);
+    $defaultMonth = (int) $defaultEnd->format('n');
+    $defaultYear = (int) $defaultEnd->format('Y');
+
+    $selectedMonth = (int) request_value('month', $defaultMonth);
+    $selectedYear = (int) request_value('year', $defaultYear);
+
+    if ($selectedMonth < 1 || $selectedMonth > 12) {
+        $selectedMonth = $defaultMonth;
+    }
+
+    if ($selectedYear < ($defaultYear - 20) || $selectedYear > ($defaultYear + 20)) {
+        $selectedYear = $defaultYear;
+    }
+
+    $range = closing_period_range_from_month_year($selectedMonth, $selectedYear);
+    $yearOptions = [];
+    for ($year = $defaultYear + $yearSpan; $year >= $defaultYear - $yearSpan; $year--) {
+        $yearOptions[(string) $year] = (string) $year;
+    }
+
+    return [
+        'selected_month' => (string) $range['month'],
+        'selected_year' => (string) $range['year'],
+        'start' => $range['start'],
+        'end' => $range['end'],
+        'month_options' => month_options_id(),
+        'year_options' => $yearOptions,
+        'start_day' => closing_period_unit_settings()['start_day'],
+        'end_day' => closing_period_unit_settings()['end_day'],
     ];
 }
 

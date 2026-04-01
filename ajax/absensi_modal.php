@@ -40,7 +40,8 @@ $renderEmployeeSelect = static function (string $name, string $label, array $emp
     $options = '<option value="">Pilih Karyawan</option>';
     foreach ($employees as $employee) {
         $isSelected = (string) $employee['id'] === (string) $selected ? ' selected' : '';
-        $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '" data-toleransi-terlambat="' . e((string) ($employee['toleransi_terlambat_menit'] ?? 0)) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
+        $shiftContext = ShiftService::resolveEmployeeShiftContext($employee);
+        $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '" data-toleransi-terlambat="' . e((string) ($employee['toleransi_terlambat_menit'] ?? 0)) . '" data-default-shift="' . e((string) ($shiftContext['default_shift'] ?? '')) . '" data-default-jam-masuk="' . e((string) ($shiftContext['scheduled_jam_masuk'] ?? '')) . '" data-default-jam-keluar="' . e((string) ($shiftContext['scheduled_jam_keluar'] ?? '')) . '" data-shift-rules="' . e(json_encode($shiftContext['rules'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
     }
 
     return '<div class="block">
@@ -51,8 +52,7 @@ $renderEmployeeSelect = static function (string $name, string $label, array $emp
     </div>';
 };
 
-$renderAbsensiForm = static function (array $employees, array $statusOptions, array $item, string $modalId) use ($renderEmployeeSelect): string {
-    $shiftOptions = ['' => 'Pilih Shift', '1' => 'Shift 1', '2' => 'Shift 2', '3' => 'Shift 3'];
+$renderAbsensiForm = static function (array $employees, array $statusOptions, array $item, string $modalId, array $shiftOptions) use ($renderEmployeeSelect): string {
 
     return '<form action="ajax/save_absensi.php" method="post" data-ajax-form data-absensi-form class="grid gap-4 md:grid-cols-2">'
         . csrf_input()
@@ -123,8 +123,12 @@ if ($mode === 'view') {
 
 $employees = fetch_all(
     'SELECT u.id,
+            u.unit_id,
             u.name,
             u.jabatan,
+            u.default_shift,
+            u.jam_masuk_default,
+            u.jam_keluar_default,
             COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat,
             COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit
      FROM users u
@@ -134,9 +138,10 @@ $employees = fetch_all(
      ORDER BY u.name',
     ['unit_id' => $user['unit_id'], 'role' => 'owner']
 );
+$globalShiftOptions = ['' => 'Pilih Shift'] + ShiftService::getShiftOptions((int) $user['unit_id']);
 
 json_response([
     'success' => true,
     'title' => 'Edit Absensi',
-    'body' => $renderAbsensiForm($employees, $statusOptions, $record, 'absensi-remote-edit'),
+    'body' => $renderAbsensiForm($employees, $statusOptions, $record, 'absensi-remote-edit', $globalShiftOptions),
 ]);

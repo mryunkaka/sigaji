@@ -35,8 +35,13 @@ try {
                 $params
             );
         } else {
-            $params['start'] = (string) ($selectionParams['start_date'] ?? '');
-            $params['end'] = (string) ($selectionParams['end_date'] ?? '');
+            $month = (int) ($selectionParams['month'] ?? 0);
+            $year = (int) ($selectionParams['year'] ?? 0);
+            $period = ($month >= 1 && $month <= 12 && $year >= 2000)
+                ? closing_period_range_from_month_year($month, $year)
+                : closing_period_filter_state();
+            $params['start'] = (string) $period['start'];
+            $params['end'] = (string) $period['end'];
 
             $ownedRows = fetch_all(
                 'SELECT p.id

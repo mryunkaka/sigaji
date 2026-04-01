@@ -7,6 +7,8 @@ verify_csrf();
 $id = (int) request_value('id', 0);
 $unitId = (int) request_value('unit_id', $authUser['unit_id']);
 $email = trim((string) request_value('email'));
+$kodeAbsensi = strtoupper(trim((string) request_value('kode_absensi', '')));
+$kodeAbsensi = $kodeAbsensi === '' ? null : preg_replace('/\s+/', '', $kodeAbsensi);
 
 if ($email === '' || trim((string) request_value('name')) === '') {
     json_response(['success' => false, 'message' => 'Nama dan email wajib diisi.'], 422);
@@ -19,6 +21,29 @@ $existing = fetch_one(
 
 if ($existing) {
     json_response(['success' => false, 'message' => 'Email sudah dipakai user lain.'], 422);
+}
+
+if ($kodeAbsensi !== null) {
+    $existingKodeAbsensi = fetch_one(
+        'SELECT id, name
+         FROM users
+         WHERE unit_id = :unit_id
+           AND kode_absensi = :kode_absensi
+           AND id != :id
+         LIMIT 1',
+        [
+            'unit_id' => $authUser['unit_id'],
+            'kode_absensi' => $kodeAbsensi,
+            'id' => $id,
+        ]
+    );
+
+    if ($existingKodeAbsensi) {
+        json_response([
+            'success' => false,
+            'message' => 'Kode absensi ini telah ada di database untuk ' . $existingKodeAbsensi['name'] . '.',
+        ], 422);
+    }
 }
 
 $fotoPath = null;
@@ -50,8 +75,12 @@ $payload = [
     'status_perkawinan' => request_value('status_perkawinan') ?: null,
     'nik' => trim((string) request_value('nik')),
     'npwp' => trim((string) request_value('npwp')),
-    'jabatan' => trim((string) request_value('jabatan')),
+    'kode_absensi' => $kodeAbsensi,
+    'jabatan' => strtoupper(trim((string) request_value('jabatan'))),
     'toleransi_terlambat_menit' => request_value('toleransi_terlambat_menit', '') === '' ? null : max(0, (int) request_value('toleransi_terlambat_menit')),
+    'default_shift' => request_value('default_shift', '') === '' ? null : max(1, (int) request_value('default_shift')),
+    'jam_masuk_default' => request_value('jam_masuk_default', '') === '' ? null : (request_value('jam_masuk_default') . ':00'),
+    'jam_keluar_default' => request_value('jam_keluar_default', '') === '' ? null : (request_value('jam_keluar_default') . ':00'),
     'role' => request_value('role', 'karyawan'),
     'unit_id' => $unitId,
     'tanggal_bergabung' => request_value('tanggal_bergabung') ?: null,

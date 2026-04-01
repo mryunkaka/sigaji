@@ -9,7 +9,11 @@ $userId = (int) request_value('user_id', 0);
 
 $employee = fetch_one(
     'SELECT u.id,
+            u.unit_id,
             u.jabatan,
+            u.default_shift,
+            u.jam_masuk_default,
+            u.jam_keluar_default,
             COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat,
             COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit
      FROM users u
@@ -28,12 +32,14 @@ $jamMasuk = request_value('jam_masuk') !== '' ? request_value('jam_masuk') . ':0
 $jamKeluar = request_value('jam_keluar') !== '' ? request_value('jam_keluar') . ':00' : null;
 $shift = request_value('shift') !== '' ? (int) request_value('shift') : null;
 $status = (string) request_value('status');
+$shiftContext = ShiftService::resolveEmployeeShiftContext($employee, $shift);
 $totalTerlambat = AttendanceRules::calculateLateFromRecord(
     $status,
     $jamMasuk,
     $shift,
     (string) ($employee['jabatan'] ?? ''),
-    (int) ($employee['toleransi_terlambat_menit'] ?? 0)
+    (int) ($employee['toleransi_terlambat_menit'] ?? 0),
+    $shiftContext['scheduled_jam_masuk'] ?? null
 );
 $jumlahPotongan = $totalTerlambat * (int) round((float) ($employee['potongan_terlambat'] ?? 1000));
 

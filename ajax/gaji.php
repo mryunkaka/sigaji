@@ -3,17 +3,24 @@
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 
-$defaultRange = closing_period_range();
-$startDate = (string) request_value('start_date', $defaultRange['start']);
-$endDate = (string) request_value('end_date', $defaultRange['end']);
-
-if (!$startDate || !$endDate || strtotime($startDate) === false || strtotime($endDate) === false) {
-    $startDate = $defaultRange['start'];
-    $endDate = $defaultRange['end'];
+$period = closing_period_filter_state();
+$selectedMonth = $period['selected_month'];
+$selectedYear = $period['selected_year'];
+$startDate = $period['start'];
+$endDate = $period['end'];
+$monthOptions = $period['month_options'];
+$yearOptions = $period['year_options'];
+$defaultClosingRange = closing_period_range();
+$defaultClosingEnd = new DateTimeImmutable((string) $defaultClosingRange['end']);
+$defaultMonth = $defaultClosingEnd->format('n');
+$defaultYear = $defaultClosingEnd->format('Y');
+$generateYear = (int) request_value('generate_year', (int) $defaultYear);
+if (!isset($yearOptions[(string) $generateYear])) {
+    $generateYear = (int) $defaultYear;
 }
-
-if ($startDate > $endDate) {
-    [$startDate, $endDate] = [$endDate, $startDate];
+$generateMonth = (string) request_value('generate_month', $selectedMonth);
+if (!isset($monthOptions[$generateMonth])) {
+    $generateMonth = (string) $defaultMonth;
 }
 
 $renderHiddenFields = static function (array $fields): string {
@@ -59,7 +66,7 @@ $totalPayrolls = (int) (fetch_one(
 )['total'] ?? 0);
 
 $payrolls = fetch_all(
-    'SELECT p.*, u.name
+    'SELECT p.*, u.name, u.kode_absensi
      FROM penggajian p
      JOIN users u ON u.id = p.user_id
      WHERE u.unit_id = :unit_id
@@ -102,6 +109,56 @@ foreach ($generatedPeriods as $period) {
     $value = $period['tanggal_awal_gaji'] . '|' . $period['tanggal_akhir_gaji'];
     $label = format_date_id($period['tanggal_awal_gaji']) . ' s/d ' . format_date_id($period['tanggal_akhir_gaji']) . ' (' . $period['total_karyawan'] . ' karyawan)';
     $periodOptions[$value] = $label;
+}
+
+$generateMonthStatuses = [];
+for ($month = 1; $month <= 12; $month++) {
+    $generatePeriod = closing_period_range_from_month_year($month, $generateYear, (int) $user['unit_id']);
+    $attendanceCount = (int) (fetch_one(
+        'SELECT COUNT(DISTINCT a.user_id) AS total
+         FROM absensi a
+         JOIN users u ON u.id = a.user_id
+         WHERE u.unit_id = :unit_id
+           AND u.role != :role
+           AND a.tanggal BETWEEN :start AND :end',
+        [
+            'unit_id' => $user['unit_id'],
+            'role' => 'owner',
+            'start' => $generatePeriod['start'],
+            'end' => $generatePeriod['end'],
+        ]
+    )['total'] ?? 0);
+
+    $generatedCount = (int) (fetch_one(
+        'SELECT COUNT(DISTINCT p.user_id) AS total
+         FROM penggajian p
+         JOIN users u ON u.id = p.user_id
+         WHERE u.unit_id = :unit_id
+           AND p.tanggal_awal_gaji = :start
+           AND p.tanggal_akhir_gaji = :end',
+        [
+            'unit_id' => $user['unit_id'],
+            'start' => $generatePeriod['start'],
+            'end' => $generatePeriod['end'],
+        ]
+    )['total'] ?? 0);
+
+    if ($attendanceCount === 0) {
+        $statusLabel = 'Tidak Ada Data';
+        $statusTone = 'slate';
+    } elseif ($generatedCount >= $attendanceCount) {
+        $statusLabel = 'Sudah Digenerate';
+        $statusTone = 'emerald';
+    } else {
+        $statusLabel = 'Belum Digenerate';
+        $statusTone = 'rose';
+    }
+
+    $generateMonthStatuses[(string) $month] = [
+        'label' => $monthOptions[(string) $month] ?? (string) $month,
+        'status_label' => $statusLabel,
+        'status_tone' => $statusTone,
+    ];
 }
 
 $tableId = 'gaji-table';
@@ -151,7 +208,7 @@ foreach ($payrolls as $item) {
     $deleteModalId = 'gaji-delete-' . $item['id'];
     $tableRows .= '<tr>
         <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
-        <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
+        <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '">' . e($item['name']) . '</td>
         <td class="px-4 py-3" data-sort-value="' . e($item['tanggal_awal_gaji']) . '">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_kotor']) . '</td>
         <td class="px-4 py-3">' . money($item['total_potongan']) . '</td>
@@ -205,10 +262,21 @@ foreach ($payrolls as $item) {
     $modals .= ui_modal($deleteModalId, 'Hapus Penggajian', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
-$filterForm = '<form class="grid gap-4 lg:grid-cols-[1fr_1fr_auto]" data-section-filter data-section="gaji">'
-    . ui_input('start_date', 'Tanggal Awal', $startDate, 'date')
-    . ui_input('end_date', 'Tanggal Akhir', $endDate, 'date')
-    . '<div class="flex items-end">' . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary']) . '</div>'
+$filterForm = '<form class="flex flex-col gap-4 lg:flex-row lg:items-end" data-section-filter data-section="gaji">'
+    . '<input type="hidden" name="generate_year" value="' . e((string) $generateYear) . '">'
+    . '<div class="lg:min-w-0 lg:flex-1">' . ui_select('month', 'Bulan', $monthOptions, $selectedMonth, ['required' => 'required']) . '</div>'
+    . '<div class="lg:min-w-0 lg:flex-1">' . ui_select('year', 'Tahun', $yearOptions, $selectedYear, ['required' => 'required']) . '</div>'
+    . '<div class="flex flex-wrap items-end gap-3 lg:flex-none">'
+    . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary'])
+    . ui_button('Reset', [
+        'type' => 'button',
+        'variant' => 'warning',
+        'attrs' => [
+            'data-load-section' => 'gaji',
+            'data-section-params' => e(json_encode(['month' => $defaultMonth, 'year' => $defaultYear, 'generate_year' => $defaultYear], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+        ],
+    ])
+    . '</div>'
     . '</form>';
 
 $generateInfo = '<div class="grid gap-4 md:grid-cols-3">'
@@ -217,10 +285,29 @@ $generateInfo = '<div class="grid gap-4 md:grid-cols-3">'
     . ui_stat('Belum Generate', (string) $pendingEmployees, 'Karyawan yang masih bisa digenerate pada rentang ini', $pendingEmployees > 0 ? 'amber' : 'emerald')
     . '</div>';
 
-$generateForm = '<form action="ajax/generate_gaji.php" method="post" data-ajax-form class="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">'
+$generateMonthButtons = '<div class="block lg:col-span-2">'
+    . '<label class="mb-2 block text-sm font-medium text-slate-700">Bulan Periode</label>'
+    . '<input type="hidden" name="month" value="' . e($generateMonth) . '" data-generate-month-input>'
+    . '<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-generate-month-picker>';
+
+foreach ($generateMonthStatuses as $monthValue => $monthStatus) {
+    $isSelected = (string) $monthValue === (string) $generateMonth;
+    $buttonClass = $isSelected
+        ? 'border-emerald-400 bg-emerald-50 ring-4 ring-emerald-100'
+        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50';
+
+    $generateMonthButtons .= '<button type="button" class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm text-slate-900 transition ' . $buttonClass . '" data-generate-month-option="' . e($monthValue) . '">'
+        . '<span class="font-medium">' . e($monthStatus['label']) . '</span>'
+        . ui_badge($monthStatus['status_label'], $monthStatus['status_tone'])
+        . '</button>';
+}
+
+$generateMonthButtons .= '</div></div>';
+
+$generateForm = '<form action="ajax/generate_gaji.php" method="post" data-ajax-form class="grid gap-4 lg:grid-cols-[280px_1fr_auto]">'
     . csrf_input()
-    . ui_input('tanggal_awal', 'Tanggal Awal', $startDate, 'date', ['required' => 'required'])
-    . ui_input('tanggal_akhir', 'Tanggal Akhir', $endDate, 'date', ['required' => 'required'])
+    . ui_select('year', 'Tahun Periode', $yearOptions, (string) $generateYear, ['required' => 'required', 'data-section-load-on-change' => 'gaji', 'data-section-load-param' => 'generate_year'])
+    . $generateMonthButtons
     . '<div class="flex items-end">' . ui_button('Generate Gaji', ['type' => 'submit', 'variant' => 'success', 'icon' => 'plus']) . '</div>'
     . '</form>';
 
@@ -240,8 +327,8 @@ $bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_p
 $rangeLabel = format_date_id($startDate) . ' - ' . format_date_id($endDate);
 
 echo '<div class="space-y-6">';
-echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Default periode closing terakhir selesai: ' . $rangeLabel . '. Tanggal bisa diubah secara custom.']);
-echo ui_panel('Generate Penggajian', $generateInfo . '<div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Generate payroll untuk rentang ' . $rangeLabel . '. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate pada rentang ini.']);
+echo ui_panel('Filter Periode Gaji', $filterForm, ['subtitle' => 'Periode selalu mengikuti closing 26 bulan sebelumnya sampai 25 bulan terpilih: ' . $rangeLabel . '.']);
+echo ui_panel('Generate Penggajian', $generateInfo . '<div class="mt-6">' . $generateForm . '</div>', ['subtitle' => 'Pilih tahun lebih dulu, lalu pilih bulan sesuai statusnya. Sistem hanya membuat payroll untuk karyawan yang punya absensi dan belum tergenerate.']);
 echo ui_panel('Laporan Penggajian', $reportForm, ['subtitle' => 'Hanya periode payroll yang sudah digenerate pada filter aktif yang bisa dicetak.']);
 echo ui_panel('Daftar Penggajian', ui_table(
         [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Periode', 'Gaji Kotor', 'Total Potongan', 'Gaji Bersih', ['label' => 'Aksi', 'sortable' => false]],

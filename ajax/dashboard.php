@@ -3,18 +3,17 @@
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 
-$defaultRange = closing_period_range();
-$startDate = (string) request_value('start_date', $defaultRange['start']);
-$endDate = (string) request_value('end_date', $defaultRange['end']);
-
-if (!$startDate || !$endDate || strtotime($startDate) === false || strtotime($endDate) === false) {
-    $startDate = $defaultRange['start'];
-    $endDate = $defaultRange['end'];
-}
-
-if ($startDate > $endDate) {
-    [$startDate, $endDate] = [$endDate, $startDate];
-}
+$period = closing_period_filter_state();
+$selectedMonth = $period['selected_month'];
+$selectedYear = $period['selected_year'];
+$startDate = $period['start'];
+$endDate = $period['end'];
+$monthOptions = $period['month_options'];
+$yearOptions = $period['year_options'];
+$defaultClosingRange = closing_period_range();
+$defaultClosingEnd = new DateTimeImmutable((string) $defaultClosingRange['end']);
+$defaultMonth = $defaultClosingEnd->format('n');
+$defaultYear = $defaultClosingEnd->format('Y');
 
 $summary = fetch_one(
     'SELECT
@@ -26,7 +25,7 @@ $summary = fetch_one(
 ) ?: [];
 
 $latestPayroll = fetch_all(
-    'SELECT p.*, u.name
+    'SELECT p.*, u.name, u.kode_absensi
      FROM penggajian p
      JOIN users u ON u.id = p.user_id
      WHERE u.unit_id = :unit_id
@@ -36,10 +35,20 @@ $latestPayroll = fetch_all(
     ['unit_id' => $user['unit_id'], 'start' => $startDate, 'end' => $endDate]
 );
 
-$filterForm = '<form class="grid gap-4 lg:grid-cols-[1fr_1fr_auto]" data-section-filter data-section="dashboard">'
-    . ui_input('start_date', 'Tanggal Awal', $startDate, 'date')
-    . ui_input('end_date', 'Tanggal Akhir', $endDate, 'date')
-    . '<div class="flex items-end">' . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary']) . '</div>'
+$filterForm = '<form class="flex flex-col gap-4 lg:flex-row lg:items-end" data-section-filter data-section="dashboard">'
+    . '<div class="lg:min-w-0 lg:flex-1">' . ui_select('month', 'Bulan', $monthOptions, $selectedMonth, ['required' => 'required']) . '</div>'
+    . '<div class="lg:min-w-0 lg:flex-1">' . ui_select('year', 'Tahun', $yearOptions, $selectedYear, ['required' => 'required']) . '</div>'
+    . '<div class="flex flex-wrap items-end gap-3 lg:flex-none">'
+    . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary'])
+    . ui_button('Reset', [
+        'type' => 'button',
+        'variant' => 'warning',
+        'attrs' => [
+            'data-load-section' => 'dashboard',
+            'data-section-params' => e(json_encode(['month' => $defaultMonth, 'year' => $defaultYear], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+        ],
+    ])
+    . '</div>'
     . '</form>';
 
 $rangeLabel = format_date_id($startDate) . ' - ' . format_date_id($endDate);
@@ -50,7 +59,7 @@ foreach ($latestPayroll as $item) {
     $viewModalId = 'dashboard-payroll-view-' . $item['id'];
     $deleteModalId = 'dashboard-payroll-delete-' . $item['id'];
     $rows .= '<tr>
-        <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
+        <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e(format_date_id($item['tanggal_awal_gaji'])) . ' s/d ' . e(format_date_id($item['tanggal_akhir_gaji'])) . '</td>
         <td class="px-4 py-3">' . money($item['gaji_bersih']) . '</td>
         <td class="px-4 py-3">' . money($item['total_potongan']) . '</td>
@@ -92,7 +101,7 @@ echo '<div class="grid gap-4 xl:grid-cols-4">'
     . '</div>';
 
 echo '<div class="mt-6 space-y-6">'
-    . ui_panel('Filter Dashboard', $filterForm, ['subtitle' => 'Default periode closing terakhir selesai: ' . $rangeLabel . '. Pilih periode dashboard sesuai kebutuhan laporan.'])
+    . ui_panel('Filter Dashboard', $filterForm, ['subtitle' => 'Periode selalu mengikuti closing 26 bulan sebelumnya sampai 25 bulan terpilih: ' . $rangeLabel . '.'])
     . ui_panel('Penggajian Terbaru', ui_table(
         ['Karyawan', 'Periode', 'Gaji Bersih', 'Total Potongan', ['label' => 'Aksi', 'sortable' => false]],
         $rows !== '' ? $rows : '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Belum ada data penggajian.</td></tr>',

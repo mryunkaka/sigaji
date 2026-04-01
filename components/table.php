@@ -100,13 +100,15 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
         ]);
 
         $bulkToolbar = '
-        <div class="hidden border-b border-slate-200 bg-white/95 px-4 py-4" data-table-selection-bar>
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div class="hidden border-b border-slate-200 bg-white/95" data-table-selection-bar>
+            <div class="flex items-center justify-between gap-3 px-4 py-4">
+                <div class="flex items-center gap-3">
                     ' . $deleteButton . '
-                    <p class="text-sm font-semibold text-slate-700" data-table-selection-count>0 data dipilih</p>
                 </div>
-                <div class="flex items-center gap-4 text-sm font-semibold">
+            </div>
+            <div class="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p class="text-sm font-semibold text-slate-700" data-table-selection-count>0 data dipilih</p>
+                <div class="flex items-center gap-4 text-sm font-semibold sm:justify-end">
                     <button type="button" class="hidden text-amber-600 transition hover:text-amber-700" data-table-select-all-results>
                         Select all <span data-table-select-all-count>' . e((string) $totalSelectableItems) . '</span>
                     </button>
@@ -116,18 +118,20 @@ function ui_table(array $headers, string $bodyHtml, array $options = []): string
         </div>';
     }
 
+    $searchPlaceholder = (string) ($options['search_placeholder'] ?? 'Cari nama / kode absensi...');
+
     $searchControl = '<div class="relative block w-full sm:max-w-xs">
-                <label for="' . e($searchId) . '" class="sr-only">Cari nama</label>
+                <label for="' . e($searchId) . '" class="sr-only">Cari data</label>
                 <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">' . ui_icon('magnifying-glass', 'h-4 w-4') . '</span>
-                <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="Cari nama..." data-table-search>
+                <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="' . e($searchPlaceholder) . '" data-table-search>
             </div>';
 
     if ($serverPagination !== null) {
         $searchControl = '<form class="flex w-full gap-2 sm:max-w-md" data-table-search-form>
                 <div class="relative min-w-0 flex-1">
-                    <label for="' . e($searchId) . '" class="sr-only">Cari nama</label>
+                    <label for="' . e($searchId) . '" class="sr-only">Cari data</label>
                     <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">' . ui_icon('magnifying-glass', 'h-4 w-4') . '</span>
-                    <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="Cari nama..." data-table-search>
+                    <input id="' . e($searchId) . '" name="' . e($tableId . '_search') . '" type="search" value="' . e($serverSearchValue) . '" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="' . e($searchPlaceholder) . '" data-table-search>
                 </div>
                 <button type="submit" class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-100">
                     Cari

@@ -10,6 +10,7 @@ $unitSettings = fetch_one(
     ['id' => $authUser['unit_id']]
 );
 $globalTolerance = (int) ($unitSettings['toleransi_terlambat_menit'] ?? 0);
+$globalShiftOptions = ['' => 'Ikuti aturan jabatan/global'] + ShiftService::getShiftOptions((int) $authUser['unit_id']);
 
 $totalUsers = (int) (fetch_one(
     'SELECT COUNT(*) AS total
@@ -33,7 +34,7 @@ $users = fetch_all(
     ['unit_id' => $authUser['unit_id']]
 );
 
-$renderUserForm = static function (array $item, string $modalId, int $unitId, int $globalTolerance, bool $isCreate = false): string {
+$renderUserForm = static function (array $item, string $modalId, int $unitId, int $globalTolerance, array $globalShiftOptions, bool $isCreate = false): string {
     $roleOptions = ['owner' => 'Owner', 'karyawan' => 'Karyawan'];
     $jenisKelaminOptions = ['Laki-laki' => 'Laki-laki', 'Perempuan' => 'Perempuan'];
     $agamaOptions = ['Islam' => 'Islam', 'Kristen' => 'Kristen', 'Katolik' => 'Katolik', 'Hindu' => 'Hindu', 'Buddha' => 'Buddha', 'Konghucu' => 'Konghucu'];
@@ -48,8 +49,12 @@ $renderUserForm = static function (array $item, string $modalId, int $unitId, in
         . ui_input('name', 'Nama Lengkap', $item['name'] ?? '', 'text', ['required' => 'required'])
         . ui_input('email', 'Email', $item['email'] ?? '', 'email', ['required' => 'required'])
         . ui_input('no_hp', 'Nomor HP', $item['no_hp'] ?? '', 'text')
-        . ui_input('jabatan', 'Jabatan', $item['jabatan'] ?? '', 'text')
+        . ui_input('kode_absensi', 'Kode Absensi', strtoupper((string) ($item['kode_absensi'] ?? '')), 'text', ['placeholder' => '124SSA23', 'style' => 'text-transform:uppercase', 'data-force-uppercase' => '1'])
+        . ui_input('jabatan', 'Jabatan', strtoupper((string) ($item['jabatan'] ?? '')), 'text', ['placeholder' => 'SECURITY', 'style' => 'text-transform:uppercase', 'data-force-uppercase' => '1'])
         . ui_input('toleransi_terlambat_menit', 'Toleransi Telat (Menit)', $userTolerance === null || $userTolerance === '' ? '' : (string) $userTolerance, 'number', ['min' => '0', 'placeholder' => 'Kosong = pakai global'])
+        . ui_select('default_shift', 'Shift Default', $globalShiftOptions, $item['default_shift'] ?? '', [])
+        . ui_input('jam_masuk_default', 'Jam Masuk Default', isset($item['jam_masuk_default']) ? substr((string) $item['jam_masuk_default'], 0, 5) : '', 'time')
+        . ui_input('jam_keluar_default', 'Jam Keluar Default', isset($item['jam_keluar_default']) ? substr((string) $item['jam_keluar_default'], 0, 5) : '', 'time')
         . ui_input('tempat_lahir', 'Tempat Lahir', $item['tempat_lahir'] ?? '', 'text')
         . ui_input('tanggal_lahir', 'Tanggal Lahir', $item['tanggal_lahir'] ?? '', 'date')
         . ui_select('jenis_kelamin', 'Jenis Kelamin', $jenisKelaminOptions, $item['jenis_kelamin'] ?? '')
@@ -61,7 +66,7 @@ $renderUserForm = static function (array $item, string $modalId, int $unitId, in
         . ui_input('tanggal_bergabung', 'Tanggal Bergabung', $item['tanggal_bergabung'] ?? '', 'date')
         . ui_input('foto', 'Foto', '', 'file', ['accept' => 'image/*'])
         . ui_input('password', $isCreate ? 'Password' : 'Password Baru', '', 'password', $isCreate ? ['required' => 'required'] : [])
-        . '<div class="md:col-span-2 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">Kosongkan toleransi per user untuk mengikuti setting global unit aktif: <strong>' . e((string) $globalTolerance) . ' menit</strong>.</div>'
+        . '<div class="md:col-span-2 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">Kosongkan toleransi agar mengikuti pengaturan umum: <strong>' . e((string) $globalTolerance) . ' menit</strong>. Jika shift dan jam kerja diisi di data karyawan, maka data itu yang dipakai.</div>'
         . '<div class="md:col-span-2">' . ui_textarea('alamat', 'Alamat', $item['alamat'] ?? '') . '</div>'
         . '<div class="md:col-span-2 flex justify-end">' . ui_button($isCreate ? 'Tambah User' : 'Simpan User', ['type' => 'submit', 'variant' => 'success']) . '</div>'
         . '</form>';
@@ -83,6 +88,9 @@ foreach ($users as $item) {
     $toleranceLabel = $hasUserTolerance
         ? ((int) $item['toleransi_terlambat_menit']) . ' menit'
         : 'Global (' . $globalTolerance . ' menit)';
+    $shiftLabel = trim((string) ($item['default_shift'] ?? '')) !== ''
+        ? 'Shift ' . (int) $item['default_shift'] . ' (' . (substr((string) ($item['jam_masuk_default'] ?? '--:--'), 0, 5)) . ' - ' . (substr((string) ($item['jam_keluar_default'] ?? '--:--'), 0, 5)) . ')'
+        : 'Ikuti jabatan/global';
     $selectCell = $isCurrentUser
         ? '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 opacity-40" disabled title="User yang sedang login tidak bisa dihapus">'
         : '<input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select>';
@@ -90,10 +98,12 @@ foreach ($users as $item) {
     $rows .= '<tr>
         <td class="px-3 py-3 text-center">' . $selectCell . '</td>
         <td class="px-4 py-3">' . $foto . '</td>
-        <td class="px-4 py-3 font-medium text-slate-900">' . e($item['name']) . '</td>
+        <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '">' . e($item['name']) . '</td>
         <td class="px-4 py-3">' . e($item['email']) . '</td>
         <td class="px-4 py-3">' . e($item['no_hp'] ?: '-') . '</td>
+        <td class="px-4 py-3">' . e($item['kode_absensi'] ?: '-') . '</td>
         <td class="px-4 py-3">' . e($item['jabatan'] ?: '-') . '</td>
+        <td class="px-4 py-3">' . e($shiftLabel) . '</td>
         <td class="px-4 py-3">' . e($toleranceLabel) . '</td>
         <td class="px-4 py-3">' . e(ucfirst($item['role'])) . '</td>
         <td class="px-4 py-3">' . e($item['tanggal_bergabung'] ? format_date_id($item['tanggal_bergabung']) : '-') . '</td>
@@ -109,10 +119,13 @@ foreach ($users as $item) {
             'Nama Lengkap' => e($item['name']),
             'Email' => e($item['email']),
             'No. HP' => e($item['no_hp'] ?: '-'),
+            'Kode Absensi' => e($item['kode_absensi'] ?: '-'),
             'Jabatan' => e($item['jabatan'] ?: '-'),
+            'Shift Default' => e($shiftLabel),
             'Toleransi Telat' => e($toleranceLabel),
             'Role' => e(ucfirst($item['role'])),
             'Tanggal Bergabung' => e($item['tanggal_bergabung'] ? format_date_id($item['tanggal_bergabung']) : '-'),
+            'Tanggal Resign' => e(!empty($item['tanggal_resign']) ? format_date_id($item['tanggal_resign']) : '-'),
         ], 3)
         . ui_detail_section('Identitas', [
             'Tempat Lahir' => e($item['tempat_lahir'] ?: '-'),
@@ -137,11 +150,11 @@ foreach ($users as $item) {
         . '</div></form>';
 
     $modals .= ui_modal($viewModalId, 'Detail User', $viewBody, ['max_width' => 'max-w-5xl']);
-    $modals .= ui_modal($editModalId, 'Edit User', $renderUserForm($item, $editModalId, (int) $authUser['unit_id'], $globalTolerance));
+    $modals .= ui_modal($editModalId, 'Edit User', $renderUserForm($item, $editModalId, (int) $authUser['unit_id'], $globalTolerance, $globalShiftOptions));
     $modals .= ui_modal($deleteModalId, 'Hapus User', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
-$modals .= ui_modal($createModalId, 'Tambah User', $renderUserForm([], $createModalId, (int) $authUser['unit_id'], $globalTolerance, true), ['max_width' => 'max-w-5xl']);
+$modals .= ui_modal($createModalId, 'Tambah User', $renderUserForm([], $createModalId, (int) $authUser['unit_id'], $globalTolerance, $globalShiftOptions, true), ['max_width' => 'max-w-5xl']);
 
 $bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_user_bulk.php" method="post" data-ajax-form class="hidden">'
     . csrf_input()
@@ -155,8 +168,8 @@ echo ui_panel('Data User', '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:
     . '</div>'
     . '</div>'
     . ui_table(
-        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], ['label' => 'Foto', 'sortable' => false], 'Nama', 'Email', 'No. HP', 'Jabatan', 'Tol. Telat', 'Role', 'Tanggal Bergabung', ['label' => 'Aksi', 'sortable' => false]],
-        $rows !== '' ? $rows : '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">Belum ada user pada unit aktif.</td></tr>',
+        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], ['label' => 'Foto', 'sortable' => false], 'Nama', 'Email', 'No. HP', 'Kode Absensi', 'Jabatan', 'Shift Default', 'Tol. Telat', 'Role', 'Tanggal Bergabung', ['label' => 'Aksi', 'sortable' => false]],
+        $rows !== '' ? $rows : '<tr><td colspan="12" class="px-4 py-8 text-center text-slate-500">Belum ada user pada unit aktif.</td></tr>',
         [
             'bulk_actions' => [
                 'form_id' => $bulkDeleteFormId,

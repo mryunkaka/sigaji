@@ -3,18 +3,17 @@
 require __DIR__ . '/../bootstrap/app.php';
 $user = Auth::require();
 
-$defaultRange = closing_period_range();
-$startDate = (string) request_value('start_date', $defaultRange['start']);
-$endDate = (string) request_value('end_date', $defaultRange['end']);
-
-if (!$startDate || !$endDate || strtotime($startDate) === false || strtotime($endDate) === false) {
-    $startDate = $defaultRange['start'];
-    $endDate = $defaultRange['end'];
-}
-
-if ($startDate > $endDate) {
-    [$startDate, $endDate] = [$endDate, $startDate];
-}
+$period = closing_period_filter_state();
+$selectedMonth = $period['selected_month'];
+$selectedYear = $period['selected_year'];
+$startDate = $period['start'];
+$endDate = $period['end'];
+$monthOptions = $period['month_options'];
+$yearOptions = $period['year_options'];
+$defaultClosingRange = closing_period_range();
+$defaultClosingEnd = new DateTimeImmutable((string) $defaultClosingRange['end']);
+$defaultMonth = $defaultClosingEnd->format('n');
+$defaultYear = $defaultClosingEnd->format('Y');
 
 $statusCounts = fetch_all(
     'SELECT a.status, COUNT(*) AS total
@@ -41,7 +40,7 @@ $totalRecords = (int) (fetch_one(
 )['total'] ?? 0);
 
 $records = fetch_all(
-    'SELECT a.*, u.name, u.jabatan
+    'SELECT a.*, u.name, u.jabatan, u.kode_absensi
      FROM absensi a
      JOIN users u ON u.id = a.user_id
      WHERE u.unit_id = :unit_id AND a.tanggal BETWEEN :start AND :end
@@ -61,8 +60,12 @@ $statusOptions = [
 
 $employees = fetch_all(
     'SELECT u.id,
+            u.unit_id,
             u.name,
             u.jabatan,
+            u.default_shift,
+            u.jam_masuk_default,
+            u.jam_keluar_default,
             COALESCE(mg.potongan_terlambat, 1000) AS potongan_terlambat,
             COALESCE(u.toleransi_terlambat_menit, un.toleransi_terlambat_menit, 0) AS toleransi_terlambat_menit
      FROM users u
@@ -72,6 +75,7 @@ $employees = fetch_all(
      ORDER BY u.name',
     ['unit_id' => $user['unit_id'], 'role' => 'owner']
 );
+$globalShiftOptions = ['' => 'Pilih Shift'] + ShiftService::getShiftOptions((int) $user['unit_id']);
 
 $renderEmployeeSelect = static function (string $name, string $label, array $employees, $selected = null): string {
     static $employeeSelectCounter = 0;
@@ -80,7 +84,8 @@ $renderEmployeeSelect = static function (string $name, string $label, array $emp
     $options = '<option value="">Pilih Karyawan</option>';
     foreach ($employees as $employee) {
         $isSelected = (string) $employee['id'] === (string) $selected ? ' selected' : '';
-        $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '" data-toleransi-terlambat="' . e((string) ($employee['toleransi_terlambat_menit'] ?? 0)) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
+        $shiftContext = ShiftService::resolveEmployeeShiftContext($employee);
+        $options .= '<option value="' . e((string) $employee['id']) . '" data-jabatan="' . e((string) ($employee['jabatan'] ?? '')) . '" data-potongan-terlambat="' . e((string) $employee['potongan_terlambat']) . '" data-toleransi-terlambat="' . e((string) ($employee['toleransi_terlambat_menit'] ?? 0)) . '" data-default-shift="' . e((string) ($shiftContext['default_shift'] ?? '')) . '" data-default-jam-masuk="' . e((string) ($shiftContext['scheduled_jam_masuk'] ?? '')) . '" data-default-jam-keluar="' . e((string) ($shiftContext['scheduled_jam_keluar'] ?? '')) . '" data-shift-rules="' . e(json_encode($shiftContext['rules'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '"' . $isSelected . '>' . e($employee['name']) . '</option>';
     }
 
     return '<div class="block">
@@ -91,8 +96,7 @@ $renderEmployeeSelect = static function (string $name, string $label, array $emp
     </div>';
 };
 
-$renderAbsensiForm = static function (array $employees, array $statusOptions, array $item, string $modalId, bool $isCreate = false) use ($renderEmployeeSelect): string {
-    $shiftOptions = ['' => 'Pilih Shift', '1' => 'Shift 1', '2' => 'Shift 2', '3' => 'Shift 3'];
+$renderAbsensiForm = static function (array $employees, array $statusOptions, array $item, string $modalId, array $shiftOptions, bool $isCreate = false) use ($renderEmployeeSelect): string {
 
     return '<form action="ajax/save_absensi.php" method="post" data-ajax-form data-absensi-form class="grid gap-4 md:grid-cols-2">'
         . csrf_input()
@@ -136,7 +140,7 @@ foreach ($records as $item) {
 
     $tableRows .= '<tr>
         <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
-        <td class="px-4 py-3 font-medium text-slate-900" title="' . e($item['name']) . '">' . e($item['name']) . '</td>
+        <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '" title="' . e($item['name']) . '">' . e($item['name']) . '</td>
         <td class="px-4 py-3" title="' . e($item['jabatan'] ?? '-') . '">' . e($item['jabatan'] ?? '-') . '</td>
         <td class="whitespace-nowrap px-4 py-3" style="max-width:none;min-width:245px;overflow:visible;text-overflow:clip;" data-sort-value="' . e($item['tanggal']) . '" title="' . e(format_date_id($item['tanggal'], false, true)) . '">' . e(format_date_id($item['tanggal'], false, true)) . '</td>
         <td class="px-4 py-3">' . ui_badge(ucfirst($item['status']), $badgeTone) . '</td>
@@ -191,7 +195,7 @@ foreach ($records as $item) {
         . '</div></form>';
 
     $modals .= ui_modal($viewModalId, 'Detail Absensi', $viewBody, ['max_width' => 'max-w-5xl']);
-    $modals .= ui_modal($modalId, 'Edit Absensi', $renderAbsensiForm($employees, $statusOptions, $item, $modalId));
+    $modals .= ui_modal($modalId, 'Edit Absensi', $renderAbsensiForm($employees, $statusOptions, $item, $modalId, $globalShiftOptions));
     $modals .= ui_modal($deleteModalId, 'Hapus Absensi', $deleteBody, ['max_width' => 'max-w-xl']);
 }
 
@@ -205,7 +209,7 @@ $modals .= ui_modal($createModalId, 'Tambah Absensi Manual', $renderAbsensiForm(
     'potongan_kehadiran' => 0,
     'potongan_ijin' => 0,
     'potongan_khusus' => 0,
-], $createModalId, true));
+], $createModalId, $globalShiftOptions, true));
 
 $uploadInputId = 'absensi-upload-file';
 $uploadForm = '<form action="ajax/upload_absen.php" method="post" enctype="multipart/form-data" data-ajax-form data-upload-progress="import-absensi" class="grid gap-4 md:grid-cols-[1fr_auto]">'
@@ -220,10 +224,22 @@ $bulkDeleteForm = '<form id="' . e($bulkDeleteFormId) . '" action="ajax/delete_a
     . '<input type="hidden" name="ids" value="">'
     . '</form>';
 
-$filterForm = '<form class="grid gap-4 lg:grid-cols-[1fr_1fr_auto]" data-section-filter data-section="absensi">'
-    . ui_input('start_date', 'Tanggal Awal', $startDate, 'date')
-    . ui_input('end_date', 'Tanggal Akhir', $endDate, 'date')
-    . '<div class="flex items-end">' . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary']) . '</div>'
+$filterForm = '<form class="flex flex-col gap-4 lg:flex-row lg:items-end" data-section-filter data-section="absensi">'
+    . '<div class="lg:min-w-0 lg:flex-1">' . ui_select('month', 'Bulan', $monthOptions, $selectedMonth, ['required' => 'required']) . '</div>'
+    . '<div class="lg:min-w-0 lg:flex-1">' . ui_select('year', 'Tahun', $yearOptions, $selectedYear, ['required' => 'required']) . '</div>'
+    . '<div class="flex flex-wrap items-end gap-3 lg:flex-none">'
+    . ui_button('Terapkan Filter', ['type' => 'submit', 'variant' => 'secondary'])
+    . ui_button('Reset', [
+        'variant' => 'warning',
+        'attrs' => [
+            'data-load-section' => 'absensi',
+            'data-section-params' => json_encode([
+                'month' => $defaultMonth,
+                'year' => $defaultYear,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ],
+    ])
+    . '</div>'
     . '</form>';
 
 $rangeLabel = date('d M Y', strtotime($startDate)) . ' - ' . date('d M Y', strtotime($endDate));
@@ -238,7 +254,7 @@ echo '<div class="grid gap-4 xl:grid-cols-5">'
 
 echo '<div class="mt-6 space-y-6">';
 echo ui_panel('Upload Absensi', $uploadForm, ['subtitle' => 'Mirror dari import Excel lama. File CSV/XLSX akan diparsing lalu membuat user/master gaji bila belum ada.']);
-echo ui_panel('Filter Periode Absensi', $filterForm, ['subtitle' => 'Default periode closing terakhir selesai: ' . $rangeLabel . '. Tanggal bisa diubah secara custom.']);
+echo ui_panel('Filter Periode Absensi', $filterForm, ['subtitle' => 'Periode selalu mengikuti closing 26 bulan sebelumnya sampai 25 bulan terpilih: ' . $rangeLabel . '.']);
 echo ui_panel('Riwayat Absensi',
     '<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">'
     . '<div class="flex flex-wrap gap-3">'
