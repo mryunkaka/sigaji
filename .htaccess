@@ -6,7 +6,7 @@ Options -Indexes
     Header set X-XSS-Protection "1; mode=block"
     Header set X-Content-Type-Options "nosniff"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
-    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http://penggajian.fourhz.com/; font-src 'self' data:; connect-src 'self' http://penggajian.fourhz.com/;"
+    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http://payrollsistemhotel.my.id/; font-src 'self' data:; connect-src 'self' http://payrollsistemhotel.my.id/;"
     Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
     Header unset Server
     Header unset X-Powered-By
