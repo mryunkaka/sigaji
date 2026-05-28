@@ -83,16 +83,39 @@ $authNotice = Auth::consumeNotice();
 
 if (is_post() && request_value('action') === 'login') {
     verify_csrf();
-    $login = trim((string) request_value('login'));
-    $password = (string) request_value('password');
-    $unitId = (int) request_value('unit_id');
-
-    if ($login === '' || $password === '' || $unitId <= 0) {
-        $error = 'Login, password, dan unit wajib diisi.';
-    } elseif (Auth::attempt($login, $password, $unitId)) {
-        redirect_to('index.php');
+    
+    // Initialize security service
+    $security = SecurityService::getInstance();
+    
+    // Check rate limiting
+    if (!$security->checkRateLimit()) {
+        $error = 'Terlalu banyak permintaan. Silakan coba lagi dalam beberapa menit.';
     } else {
-        $error = 'Kredensial tidak valid atau unit tidak sesuai.';
+        // Check brute force protection
+        $loginIdentifier = trim((string) request_value('login'));
+        if (!$security->checkBruteForce($loginIdentifier)) {
+            $error = 'Terlalu banyak percobaan login gagal. Akun dikunci sementara. Silakan coba lagi dalam ' . floor(env('BRUTE_FORCE_LOCKOUT_TIME', '900') / 60) . ' menit.';
+        } else {
+            $login = $loginIdentifier;
+            $password = (string) request_value('password');
+            $unitId = (int) request_value('unit_id');
+
+            // Sanitize inputs
+            $login = $security->sanitizeInput($login);
+            
+            if ($security->hasXSS($login) || $security->hasXSS($password)) {
+                $error = 'Input tidak valid.';
+                $security->recordFailedAttempt($loginIdentifier);
+            } elseif ($login === '' || $password === '' || $unitId <= 0) {
+                $error = 'Login, password, dan unit wajib diisi.';
+            } elseif (Auth::attempt($login, $password, $unitId)) {
+                $security->resetBruteForce($loginIdentifier);
+                redirect_to('index.php');
+            } else {
+                $security->recordFailedAttempt($loginIdentifier);
+                $error = 'Kredensial tidak valid atau unit tidak sesuai.';
+            }
+        }
     }
 }
 

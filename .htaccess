@@ -1,16 +1,90 @@
 Options -Indexes
 
-RewriteEngine On
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self';"
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header unset Server
+    Header unset X-Powered-By
+</IfModule>
 
-# Serve static assets from /public while document root points to project root.
-RewriteRule ^assets/(.*)$ public/assets/$1 [L]
-RewriteRule ^uploads/(.*)$ public/uploads/$1 [L]
+# Anti-DDoS Protection
+<IfModule mod_rewrite.c>
+    RewriteEngine On
 
-# Deny access to internal folders and sensitive files.
-RewriteRule ^(bootstrap|components|config|docs|node_modules|resources|services|storage|views)/ - [F,L,NC]
-RewriteRule ^\.git/ - [F,L,NC]
-RewriteRule ^(\.env|\.git|package\.json|package-lock\.json|tailwind\.config\.js|README\.md|hark8423_gaji\.sql)$ - [F,L,NC]
+    # Limit request size (prevent large payload attacks)
+    LimitRequestBody 10485760
+
+    # Rate limiting by IP
+    RewriteCond %{REQUEST_METHOD} POST
+    RewriteCond %{REQUEST_URI} ^/(login|ajax)/
+    RewriteCond %{HTTP:X-Forwarded-For} ^(.+)$ [OR]
+    RewriteCond %{REMOTE_ADDR} ^(.+)$
+    RewriteRule .* - [E=CLIENT_IP:%1]
+
+    # Block suspicious user agents
+    RewriteCond %{HTTP_USER_AGENT} (bot|crawl|spider|scraper|curl|wget|python|perl|java|go|ruby|libwww|http|nmap|nikto|sqlmap|w3af|acunetix|burp|owasp|zap|metasploit) [NC,OR]
+    RewriteCond %{HTTP_USER_AGENT} (havij|libwww-perl|java|python|perl|ruby|curl|wget|winhttp|httrack|clshttp|archiver|loader|webbandit|extractor) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block empty user agents
+    RewriteCond %{HTTP_USER_AGENT} ^$
+    RewriteRule .* - [F,L]
+
+    # Block requests without proper headers
+    RewriteCond %{HTTP_REFERER} ^$
+    RewriteCond %{REQUEST_METHOD} POST
+    RewriteCond %{REQUEST_URI} !^/ajax/
+    RewriteRule .* - [F,L]
+
+    # Anti-inurl/dork protection - block common exploit patterns
+    RewriteCond %{QUERY_STRING} (union.*select|select.*from|insert.*into|delete.*from|update.*set|drop.*table|create.*table|alter.*table) [NC,OR]
+    RewriteCond %{QUERY_STRING} (eval\(|base64_decode|shell_exec|passthru|system\(|exec\(|proc_open|popen) [NC,OR]
+    RewriteCond %{QUERY_STRING} (javascript:|vbscript:|onload=|onerror=|onclick=) [NC,OR]
+    RewriteCond %{QUERY_STRING} (../|\.\.\\|etc/passwd|/etc/passwd|/proc/self/environ) [NC,OR]
+    RewriteCond %{QUERY_STRING} (mosconfig_|<script|document\.cookie|window\.location) [NC,OR]
+    RewriteCond %{QUERY_STRING} (GLOBALS|_REQUEST|_COOKIE|_SERVER|_ENV|_FILES) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block directory traversal attempts
+    RewriteCond %{REQUEST_URI} (\.\./|\.\.\\)
+    RewriteRule .* - [F,L]
+
+    # Block common exploit files
+    RewriteCond %{REQUEST_URI} (wp-config\.php|xmlrpc\.php|phpmyadmin|admin|administrator|install\.php|setup\.php) [NC]
+    RewriteRule .* - [F,L]
+
+    # Serve static assets from /public while document root points to project root.
+    RewriteRule ^assets/(.*)$ public/assets/$1 [L]
+    RewriteRule ^uploads/(.*)$ public/uploads/$1 [L]
+
+    # Deny access to internal folders and sensitive files.
+    RewriteRule ^(bootstrap|components|config|docs|node_modules|resources|services|storage|views)/ - [F,L,NC]
+    RewriteRule ^\.git/ - [F,L,NC]
+    RewriteRule ^(\.env|\.git|package\.json|package-lock\.json|tailwind\.config\.js|README\.md|hark8423_gaji\.sql)$ - [F,L,NC]
+</IfModule>
 
 <FilesMatch "^(?:\.env|package\.json|package-lock\.json|tailwind\.config\.js|README\.md|hark8423_gaji\.sql)$">
     Require all denied
 </FilesMatch>
+
+# Additional file type restrictions
+<FilesMatch "\.(env|log|sql|bak|backup|old|tmp|swp|key|pem|crt|cert)$">
+    Require all denied
+</FilesMatch>
+
+# PHP Security
+<IfModule mod_php.c>
+    php_flag display_errors Off
+    php_flag log_errors On
+    php_value error_log /storage/logs/php_errors.log
+    php_value max_execution_time 30
+    php_value max_input_time 60
+    php_value memory_limit 128M
+    php_value post_max_size 10M
+    php_value upload_max_filesize 10M
+</IfModule>

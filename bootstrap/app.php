@@ -8,6 +8,9 @@ require_once __DIR__ . '/helpers.php';
 load_env(__DIR__ . '/../.env');
 date_default_timezone_set(env('APP_TIMEZONE', 'Asia/Singapore'));
 
+require_once __DIR__ . '/../services/SecurityService.php';
+SecurityService::applySecurityHeaders();
+
 require_once __DIR__ . '/../services/Auth.php';
 Auth::boot();
 require_once __DIR__ . '/../services/ActivityLogService.php';
