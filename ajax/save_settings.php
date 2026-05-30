@@ -17,6 +17,7 @@ if (!$unit) {
 }
 
 $tolerance = max(0, (int) request_value('toleransi_terlambat_menit', 0));
+$potonganAlpa = max(0, (int) request_value('potongan_alpa', 0));
 $startDay = max(1, min(31, (int) request_value('hari_mulai_periode', 26)));
 $endDay = max(1, min(31, (int) request_value('hari_akhir_periode', 25)));
 $globalShiftCodes = $_POST['global_shift_code'] ?? [];
@@ -67,12 +68,14 @@ try {
     execute_query(
         'UPDATE units
          SET toleransi_terlambat_menit = :toleransi_terlambat_menit,
+             potongan_alpa = :potongan_alpa,
              hari_mulai_periode = :hari_mulai_periode,
              hari_akhir_periode = :hari_akhir_periode,
              updated_at = :updated_at
          WHERE id = :id',
         [
             'toleransi_terlambat_menit' => $tolerance,
+            'potongan_alpa' => $potonganAlpa,
             'hari_mulai_periode' => $startDay,
             'hari_akhir_periode' => $endDay,
             'updated_at' => now_string(),
@@ -95,6 +98,7 @@ ActivityLogService::logCurrentUser(
     [
         'unit_id' => $authUser['unit_id'],
         'toleransi_terlambat_menit' => $tolerance,
+        'potongan_alpa' => $potonganAlpa,
         'hari_mulai_periode' => $startDay,
         'hari_akhir_periode' => $endDay,
         'global_shift_count' => count($globalRules),

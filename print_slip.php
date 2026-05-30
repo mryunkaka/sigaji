@@ -43,6 +43,7 @@ foreach ($absensiRows as $row) {
         $potonganKhususRows[] = $row;
     }
 }
+$potonganAlpaPerHari = $counts['alpa'] > 0 ? (int) round(((int) $item['potongan_kehadiran']) / $counts['alpa']) : 0;
 
 $owner = fetch_one(
     'SELECT name FROM users WHERE unit_id = :unit_id AND role = :role ORDER BY id ASC LIMIT 1',
@@ -462,6 +463,17 @@ $pdfFilename = $pdfBaseFilename . '.pdf';
                                     <strong>Total Potongan Ijin:</strong> <?= money($item['potongan_ijin']) ?>
                                 <?php else: ?>
                                     Tidak ada data ijin.
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Alpa</td>
+                            <td colspan="2">
+                                <?php if ($counts['alpa'] > 0): ?>
+                                    <strong>Total Alpa:</strong> <?= e((string) $counts['alpa']) ?> hari<br>
+                                    <strong>Potongan:</strong> <?= e((string) $counts['alpa']) ?> x <?= money($potonganAlpaPerHari) ?> = <?= money($item['potongan_kehadiran']) ?>
+                                <?php else: ?>
+                                    Tidak ada data alpa.
                                 <?php endif; ?>
                             </td>
                         </tr>

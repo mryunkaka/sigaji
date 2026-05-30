@@ -13,9 +13,10 @@ $totalMasters = (int) (fetch_one(
 )['total'] ?? 0);
 
 $masters = fetch_all(
-    'SELECT mg.*, u.name, u.jabatan, u.kode_absensi
+    'SELECT mg.*, u.name, u.jabatan, u.kode_absensi, COALESCE(un.potongan_alpa, 0) AS potongan_alpa_global
      FROM master_gaji mg
      JOIN users u ON u.id = mg.user_id
+     JOIN units un ON un.id = u.unit_id
      WHERE u.unit_id = :unit_id AND u.role != "owner"
      ORDER BY u.name',
     ['unit_id' => $user['unit_id']]
@@ -54,6 +55,7 @@ foreach ($masters as $item) {
         <td class="px-4 py-3">' . e($item['jabatan'] ?: '-') . '</td>
         <td class="px-4 py-3">' . money($item['gaji_pokok']) . '</td>
         <td class="px-4 py-3">' . money($item['potongan_terlambat']) . '/menit</td>
+        <td class="px-4 py-3">' . ($item['potongan_alpa'] === null ? money($item['potongan_alpa_global']) . ' global' : money($item['potongan_alpa'])) . '/hari</td>
         <td class="px-4 py-3">' . money($item['tunjangan_makan']) . '</td>
         <td class="px-4 py-3">' . money($item['tunjangan_jabatan']) . '</td>
         <td class="px-4 py-3"><div class="flex flex-nowrap items-center gap-2">'
@@ -69,6 +71,7 @@ foreach ($masters as $item) {
         . '<input type="hidden" name="id" value="' . e($item['id']) . '">'
         . ui_input('gaji_pokok', 'Gaji Pokok', $item['gaji_pokok'], 'number', ['min' => '0'])
         . ui_input('potongan_terlambat', 'Potongan Terlambat / Menit', $item['potongan_terlambat'], 'number', ['min' => '0'])
+        . ui_input('potongan_alpa', 'Potongan Alpa / Hari', $item['potongan_alpa'] ?? '', 'number', ['min' => '0', 'placeholder' => 'Kosong = pakai global ' . money($item['potongan_alpa_global'])])
         . ui_input('tunjangan_bbm', 'Tunjangan BBM', $item['tunjangan_bbm'], 'number', ['min' => '0'])
         . ui_input('tunjangan_makan', 'Tunjangan Makan / Hadir', $item['tunjangan_makan'], 'number', ['min' => '0'])
         . ui_input('tunjangan_jabatan', 'Tunjangan Jabatan / Hadir', $item['tunjangan_jabatan'], 'number', ['min' => '0'])
@@ -86,6 +89,7 @@ foreach ($masters as $item) {
         . ui_detail_section('Komponen Master Gaji', [
             'Gaji Pokok' => e(money($item['gaji_pokok'])),
             'Potongan Terlambat / Menit' => e(money($item['potongan_terlambat'])) . '/menit',
+            'Potongan Alpa / Hari' => $item['potongan_alpa'] === null ? e(money($item['potongan_alpa_global'])) . ' global' : e(money($item['potongan_alpa'])),
             'Tunjangan BBM' => e(money($item['tunjangan_bbm'])),
             'Tunjangan Makan / Hadir' => e(money($item['tunjangan_makan'])),
             'Tunjangan Jabatan / Hadir' => e(money($item['tunjangan_jabatan'])),
@@ -116,6 +120,19 @@ foreach ($payrolls as $item) {
     $modalId = 'payroll-edit-' . $item['id'];
     $viewModalId = 'payroll-view-' . $item['id'];
     $deleteModalId = 'payroll-delete-' . $item['id'];
+    $alpaCount = (int) (fetch_one(
+        "SELECT COUNT(*) AS total
+         FROM absensi
+         WHERE user_id = :user_id
+           AND tanggal BETWEEN :start AND :end
+           AND status = 'alpa'",
+        [
+            'user_id' => $item['user_id'],
+            'start' => $item['tanggal_awal_gaji'],
+            'end' => $item['tanggal_akhir_gaji'],
+        ]
+    )['total'] ?? 0);
+    $potonganAlpaPerHari = $alpaCount > 0 ? (int) round(((int) $item['potongan_kehadiran']) / $alpaCount) : 0;
     $payrollRows .= '<tr>
         <td class="px-3 py-3 text-center"><input type="checkbox" value="' . e((string) $item['id']) . '" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select></td>
         <td class="px-4 py-3 font-medium text-slate-900" data-search-text="' . e(trim((string) $item['name'] . ' ' . (string) ($item['kode_absensi'] ?? ''))) . '">' . e($item['name']) . '</td>
@@ -140,6 +157,7 @@ foreach ($payrolls as $item) {
         . ui_input('potongan_khusus', 'Potongan Khusus / Hutang', $item['potongan_khusus'], 'number', ['min' => '0'])
         . ui_input('potongan_ijin', 'Potongan Ijin', $item['potongan_ijin'], 'number', ['min' => '0'])
         . ui_input('potongan_kehadiran', 'Potongan Kehadiran', $item['potongan_kehadiran'], 'number', ['min' => '0'])
+        . ui_input('potongan_alpa_per_hari', 'Potongan Alpa / Hari (' . $alpaCount . ' alpa)', $alpaCount > 0 ? $potonganAlpaPerHari : '', 'number', ['min' => '0', 'placeholder' => 'Isi untuk hitung ulang potongan kehadiran'])
         . ui_input('lembur', 'Lembur', $item['lembur'], 'number', ['min' => '0'])
         . ui_input('tunjangan_bbm', 'Tunjangan BBM', $item['tunjangan_bbm'], 'number', ['min' => '0'])
         . ui_input('tunjangan_lainnya', 'Tunjangan Lainnya', $item['tunjangan_lainnya'], 'number', ['min' => '0'])
@@ -160,6 +178,7 @@ foreach ($payrolls as $item) {
             'Potongan Khusus' => e(money($item['potongan_khusus'])),
             'Potongan Ijin' => e(money($item['potongan_ijin'])),
             'Potongan Kehadiran' => e(money($item['potongan_kehadiran'])),
+            'Detail Alpa' => $alpaCount > 0 ? e((string) $alpaCount) . ' x ' . e(money($potonganAlpaPerHari)) . ' = ' . e(money($item['potongan_kehadiran'])) : 'Tidak ada alpa',
             'Lembur' => e(money($item['lembur'])),
             'Tunjangan BBM' => e(money($item['tunjangan_bbm'])),
             'Tunjangan Lainnya' => e(money($item['tunjangan_lainnya'])),
@@ -194,8 +213,8 @@ $payrollBulkDeleteForm = '<form id="' . e($payrollBulkDeleteFormId) . '" action=
 
 echo '<div class="space-y-6">';
 echo ui_panel('Validasi Master Gaji', ui_table(
-        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Jabatan', 'Gaji Pokok', 'Denda Telat', 'Tunjangan Makan', 'Tunjangan Jabatan', ['label' => 'Aksi', 'sortable' => false]],
-        $masterRows !== '' ? $masterRows : '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>',
+        [['label' => '<input type="checkbox" class="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500" data-table-select-all>', 'sortable' => false, 'raw' => true], 'Karyawan', 'Jabatan', 'Gaji Pokok', 'Denda Telat', 'Denda Alpa', 'Tunjangan Makan', 'Tunjangan Jabatan', ['label' => 'Aksi', 'sortable' => false]],
+        $masterRows !== '' ? $masterRows : '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Belum ada master gaji.</td></tr>',
         [
             'bulk_actions' => [
                 'form_id' => $masterBulkDeleteFormId,
@@ -204,7 +223,7 @@ echo ui_panel('Validasi Master Gaji', ui_table(
                 'empty_message' => 'Pilih master gaji yang ingin dihapus.',
                 'confirm_message' => 'Hapus permanen {count} master gaji terpilih?',
             ],
-            'numeric_columns' => [3, 4, 5, 6],
+            'numeric_columns' => [3, 4, 5, 6, 7],
             'storage_key' => 'validasi-master-gaji',
             'search_column' => 1,
             'table_id' => $masterTableId,

@@ -13,8 +13,8 @@ final class PayrollService
         }
 
         execute_query(
-            'INSERT INTO master_gaji (user_id, gaji_pokok, tunjangan_bbm, tunjangan_makan, tunjangan_jabatan, tunjangan_kehadiran, tunjangan_lainnya, potongan_terlambat, pot_bpjs_jht, pot_bpjs_kes, created_at, updated_at)
-             VALUES (:user_id, 1500000, 0, 0, 0, 0, 0, 1000, 0, 0, :created_at, :updated_at)',
+            'INSERT INTO master_gaji (user_id, gaji_pokok, tunjangan_bbm, tunjangan_makan, tunjangan_jabatan, tunjangan_kehadiran, tunjangan_lainnya, potongan_terlambat, potongan_alpa, pot_bpjs_jht, pot_bpjs_kes, created_at, updated_at)
+             VALUES (:user_id, 1500000, 0, 0, 0, 0, 0, 1000, NULL, 0, 0, :created_at, :updated_at)',
             [
                 'user_id' => $userId,
                 'created_at' => now_string(),
@@ -30,6 +30,14 @@ final class PayrollService
     public static function calculateSalary(int $userId, string $tanggalAwal, string $tanggalAkhir): array
     {
         $master = self::ensureMasterGaji($userId);
+        $employee = fetch_one(
+            'SELECT u.unit_id, COALESCE(un.potongan_alpa, 0) AS potongan_alpa_global
+             FROM users u
+             JOIN units un ON un.id = u.unit_id
+             WHERE u.id = :user_id
+             LIMIT 1',
+            ['user_id' => $userId]
+        ) ?: [];
         $hadir = (int) (fetch_one(
             "SELECT COUNT(*) AS total FROM absensi WHERE user_id = :user_id AND tanggal BETWEEN :start AND :end AND status = 'hadir'",
             ['user_id' => $userId, 'start' => $tanggalAwal, 'end' => $tanggalAkhir]
@@ -61,11 +69,15 @@ final class PayrollService
         $tunjanganKehadiran = (float) ($master['tunjangan_kehadiran'] ?? 0);
         $tunjanganLainnya = (float) ($master['tunjangan_lainnya'] ?? 0);
         $potonganTerlambatRate = (float) ($master['potongan_terlambat'] ?? 0);
+        $masterPotonganAlpa = $master['potongan_alpa'] ?? null;
+        $potonganAlpaRate = $masterPotonganAlpa !== null && $masterPotonganAlpa !== ''
+            ? (float) $masterPotonganAlpa
+            : (float) ($employee['potongan_alpa_global'] ?? 0);
         $potBpjsJht = (float) ($master['pot_bpjs_jht'] ?? 0);
         $potBpjsKes = (float) ($master['pot_bpjs_kes'] ?? 0);
         $totalTerlambat = (int) ($totals['total_terlambat'] ?? 0);
         $dendaTerlambat = $totalTerlambat * $potonganTerlambatRate;
-        $potonganKehadiran = $alpa * ($gajiPokok / $jumlahHari);
+        $potonganKehadiran = $alpa * $potonganAlpaRate;
         $potonganIjin = (float) ($totals['potongan_ijin'] ?? 0);
         $potonganKhusus = (float) ($totals['potongan_khusus'] ?? 0);
         $lembur = (float) ($totals['lembur'] ?? 0);
@@ -96,6 +108,7 @@ final class PayrollService
             'total_potongan' => (int) round($totalPotongan),
             'hadir' => $hadir,
             'alpa' => $alpa,
+            'potongan_alpa_per_hari' => (int) round($potonganAlpaRate),
             'total_terlambat' => $totalTerlambat,
         ];
     }

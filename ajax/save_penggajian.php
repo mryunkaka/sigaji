@@ -56,6 +56,22 @@ $tunjanganLainnya = (int) request_value('tunjangan_lainnya', $record['tunjangan_
 $lembur = (int) request_value('lembur', $record['lembur']);
 
 $potonganKehadiran = (int) request_value('potongan_kehadiran', $record['potongan_kehadiran']);
+$potonganAlpaPerHariInput = request_value('potongan_alpa_per_hari', '');
+if ($potonganAlpaPerHariInput !== '') {
+    $alpaCount = (int) (fetch_one(
+        "SELECT COUNT(*) AS total
+         FROM absensi
+         WHERE user_id = :user_id
+           AND tanggal BETWEEN :start AND :end
+           AND status = 'alpa'",
+        [
+            'user_id' => $userId,
+            'start' => $tanggalAwalGaji,
+            'end' => $tanggalAkhirGaji,
+        ]
+    )['total'] ?? 0);
+    $potonganKehadiran = $alpaCount * max(0, (int) $potonganAlpaPerHariInput);
+}
 $potonganIjin = (int) request_value('potongan_ijin', $record['potongan_ijin']);
 $potonganKhusus = (int) request_value('potongan_khusus', $record['potongan_khusus']);
 $potonganTerlambat = (int) request_value('potongan_terlambat', $record['potongan_terlambat']);

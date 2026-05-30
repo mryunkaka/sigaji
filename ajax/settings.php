@@ -8,7 +8,7 @@ $migrationMissing = false;
 
 try {
     $unit = fetch_one(
-        'SELECT id, nama_unit, toleransi_terlambat_menit, hari_mulai_periode, hari_akhir_periode
+        'SELECT id, nama_unit, toleransi_terlambat_menit, hari_mulai_periode, hari_akhir_periode, potongan_alpa
          FROM units
          WHERE id = :id
          LIMIT 1',
@@ -26,6 +26,7 @@ try {
     if ($unit) {
         $unit['hari_mulai_periode'] = 26;
         $unit['hari_akhir_periode'] = 25;
+        $unit['potongan_alpa'] = 0;
     }
 }
 
@@ -108,6 +109,7 @@ $jabatanRuleFields .= '</tbody></table></div>'
 $form = '<form action="ajax/save_settings.php" method="post" data-ajax-form class="grid gap-4 md:grid-cols-2">'
     . csrf_input()
     . ui_input('toleransi_terlambat_menit', 'Toleransi Terlambat Global (Menit)', $unit['toleransi_terlambat_menit'] ?? 0, 'number', ['min' => '0', 'required' => 'required'])
+    . ui_input('potongan_alpa', 'Potongan Alpa Global / Hari', $unit['potongan_alpa'] ?? 0, 'number', ['min' => '0', 'required' => 'required'])
     . ui_input('hari_mulai_periode', 'Hari Mulai Periode', $unit['hari_mulai_periode'] ?? 26, 'number', ['min' => '1', 'max' => '31', 'required' => 'required'])
     . ui_input('hari_akhir_periode', 'Hari Akhir Periode', $unit['hari_akhir_periode'] ?? 25, 'number', ['min' => '1', 'max' => '31', 'required' => 'required'])
     . '<div class="md:col-span-2 rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">Toleransi ini berlaku untuk semua karyawan. Jika pada data karyawan diisi sendiri, maka nilai karyawan yang dipakai.</div>'

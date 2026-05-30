@@ -25,6 +25,7 @@ execute_query(
          tunjangan_kehadiran = :tunjangan_kehadiran,
          tunjangan_lainnya = :tunjangan_lainnya,
          potongan_terlambat = :potongan_terlambat,
+         potongan_alpa = :potongan_alpa,
          pot_bpjs_jht = :pot_bpjs_jht,
          pot_bpjs_kes = :pot_bpjs_kes,
          updated_at = :updated_at
@@ -37,6 +38,7 @@ execute_query(
         'tunjangan_kehadiran' => (int) request_value('tunjangan_kehadiran', 0),
         'tunjangan_lainnya' => (int) request_value('tunjangan_lainnya', 0),
         'potongan_terlambat' => (int) request_value('potongan_terlambat', 0),
+        'potongan_alpa' => request_value('potongan_alpa', '') === '' ? null : (int) request_value('potongan_alpa', 0),
         'pot_bpjs_jht' => (int) request_value('pot_bpjs_jht', 0),
         'pot_bpjs_kes' => (int) request_value('pot_bpjs_kes', 0),
         'updated_at' => now_string(),
