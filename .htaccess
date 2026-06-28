@@ -54,7 +54,8 @@ Options -Indexes
     RewriteCond %{REQUEST_URI} (\.\./|\.\.\\)
     RewriteRule .* - [F,L]
 
-    # Block common exploit files
+    # Block common exploit files, except the protected subscription admin page.
+    RewriteCond %{REQUEST_URI} !^/subscription-admin\.php$ [NC]
     RewriteCond %{REQUEST_URI} (wp-config\.php|xmlrpc\.php|phpmyadmin|admin|administrator|install\.php|setup\.php) [NC]
     RewriteRule .* - [F,L]
 
