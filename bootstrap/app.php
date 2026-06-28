@@ -11,9 +11,10 @@ date_default_timezone_set(env('APP_TIMEZONE', 'Asia/Singapore'));
 require_once __DIR__ . '/../services/SecurityService.php';
 SecurityService::applySecurityHeaders();
 
+require_once __DIR__ . '/../services/ActivityLogService.php';
+require_once __DIR__ . '/../services/SubscriptionService.php';
 require_once __DIR__ . '/../services/Auth.php';
 Auth::boot();
-require_once __DIR__ . '/../services/ActivityLogService.php';
 require_once __DIR__ . '/../services/AttendanceRules.php';
 require_once __DIR__ . '/../services/ShiftService.php';
 require_once __DIR__ . '/../services/PayrollService.php';

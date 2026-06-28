@@ -71,7 +71,7 @@ if ($requestPath !== '/' && $requestPath !== '/index.php') {
         $dispatchPhp($requestPath);
     }
 
-    if (in_array($requestPath, ['/logout.php', '/print_slip.php', '/print_laporan.php', '/activity-log.php'], true)) {
+    if (in_array($requestPath, ['/logout.php', '/print_slip.php', '/print_laporan.php', '/activity-log.php', '/subscription-admin.php'], true)) {
         $dispatchPhp($requestPath);
     }
 }
@@ -80,6 +80,19 @@ require __DIR__ . '/bootstrap/app.php';
 
 $error = '';
 $authNotice = Auth::consumeNotice();
+$subscriptionNotice = '';
+$subscriptionError = '';
+$units = fetch_all('SELECT id, nama_unit FROM units ORDER BY nama_unit');
+
+if (is_post() && request_value('action') === 'subscription_request') {
+    verify_csrf();
+    $result = SubscriptionService::submitRequest($_POST, $_FILES['proof_file'] ?? []);
+    if ($result['success']) {
+        $subscriptionNotice = $result['message'];
+    } else {
+        $subscriptionError = $result['message'];
+    }
+}
 
 if (is_post() && request_value('action') === 'login') {
     verify_csrf();
@@ -110,6 +123,10 @@ if (is_post() && request_value('action') === 'login') {
                 $error = 'Login, password, dan unit wajib diisi.';
             } elseif (Auth::attempt($login, $password, $unitId)) {
                 $security->resetBruteForce($loginIdentifier);
+                $loginUser = Auth::user();
+                if (($loginUser['role'] ?? '') === 'owner' && !SubscriptionService::isActiveForUnit((int) $loginUser['unit_id'])) {
+                    redirect_to('index.php#settings');
+                }
                 redirect_to('index.php');
             } else {
                 $security->recordFailedAttempt($loginIdentifier);
@@ -119,9 +136,32 @@ if (is_post() && request_value('action') === 'login') {
     }
 }
 
-$units = fetch_all('SELECT id, nama_unit FROM units ORDER BY nama_unit');
 $user = Auth::user();
 $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['id' => $user['unit_id']])['nama_unit'] ?? '-') : '-';
+$selectedSubscriptionUnit = (int) request_value('unit_id', $units[0]['id'] ?? 0);
+$showOwnerLogin = request_value('admin') === '1' || (is_post() && request_value('action') === 'login');
+$hasActiveUnit = false;
+$selectedSubscriptionStatus = null;
+foreach ($units as $unitOption) {
+    $status = SubscriptionService::statusForUnit((int) $unitOption['id']);
+    if ((int) $unitOption['id'] === $selectedSubscriptionUnit) {
+        $selectedSubscriptionStatus = $status;
+    }
+    if ($status['active']) {
+        $hasActiveUnit = true;
+    }
+}
+$subscriptionGateActive = !$user
+    && ($selectedSubscriptionStatus['locked'] ?? false)
+    && (
+        !$hasActiveUnit
+        || request_value('action') === 'subscription_request'
+        || (request_value('action') === 'login' && $error !== '')
+        || request_value('renew') === '1'
+    );
+$durationOptions = SubscriptionService::durationOptions();
+$currentSubscriptionStatus = $user ? SubscriptionService::statusForUnit((int) $user['unit_id']) : null;
+$subscriptionLockedForCurrentUser = $user && ($currentSubscriptionStatus['locked'] ?? false);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -166,7 +206,62 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
             </div>
         </div>
     </div>
-    <?php if (!$user): ?>
+    <?php if ($subscriptionGateActive): ?>
+        <main class="login-shell">
+            <section class="login-single-wrap">
+                <div class="login-single-card max-w-[680px]">
+                    <div class="text-center">
+                        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-amber-600">Subscription Jatuh Tempo</p>
+                        <h2 class="mt-3 text-3xl font-semibold text-slate-900 sm:text-5xl">Perpanjangan Akses</h2>
+                        <p class="mt-4 text-sm text-slate-500">Mulai tanggal 28 jam 00:00, aplikasi tidak bisa diakses oleh semua unit sampai subscription diperpanjang.</p>
+                    </div>
+
+                    <?php if ($subscriptionNotice !== ''): ?>
+                        <div class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><?= e($subscriptionNotice) ?></div>
+                    <?php endif; ?>
+                    <?php if ($subscriptionError !== ''): ?>
+                        <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><?= e($subscriptionError) ?></div>
+                    <?php endif; ?>
+
+                    <form method="post" enctype="multipart/form-data" class="mt-7 grid gap-4 md:grid-cols-2">
+                        <?= csrf_input() ?>
+                        <input type="hidden" name="action" value="subscription_request">
+                        <?= ui_select('unit_id', 'Unit*', array_column($units, 'nama_unit', 'id'), $selectedSubscriptionUnit, ['required' => 'required']) ?>
+                        <?= ui_select('duration_code', 'Waktu Berlangganan*', $durationOptions, request_value('duration_code', '1_month'), ['required' => 'required']) ?>
+                        <?= ui_input('requested_by', 'Nama Pengirim', request_value('requested_by', ''), 'text', ['placeholder' => 'Nama user / admin']) ?>
+                        <?= ui_input('contact', 'No. HP / Kontak', request_value('contact', ''), 'text', ['placeholder' => 'Kontak untuk konfirmasi']) ?>
+                        <label class="block md:col-span-2">
+                            <span class="mb-2 block text-sm font-medium text-slate-700">Foto / File Bukti Pembayaran*</span>
+                            <input type="file" name="proof_file" accept="image/jpeg,image/png,image/webp,application/pdf" required class="w-full rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm text-slate-900 outline-none transition file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100">
+                            <span class="mt-2 block text-xs text-slate-500">Format JPG, PNG, WEBP, atau PDF. Maksimal 5 MB.</span>
+                        </label>
+                        <div class="md:col-span-2">
+                            <?= ui_button('Kirim Bukti Pembayaran', ['type' => 'submit', 'variant' => 'warning', 'class' => 'w-full', 'icon' => 'arrow-up-tray']) ?>
+                        </div>
+                    </form>
+
+                    <?php if ($showOwnerLogin): ?>
+                        <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                            <?php if ($authNotice !== ''): ?>
+                                <div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><?= e($authNotice) ?></div>
+                            <?php endif; ?>
+                            <?php if ($error !== ''): ?>
+                                <div class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><?= e($error) ?></div>
+                            <?php endif; ?>
+                            <form method="post" class="grid gap-4">
+                                <?= csrf_input() ?>
+                                <input type="hidden" name="action" value="login">
+                                <?= ui_input('login', 'Nama / Email Owner*', request_value('login', ''), 'text', ['required' => 'required', 'autocomplete' => 'username']) ?>
+                                <?= ui_input('password', 'Password*', '', 'password', ['required' => 'required', 'autocomplete' => 'current-password']) ?>
+                                <?= ui_select('unit_id', 'Unit Validasi*', array_column($units, 'nama_unit', 'id'), $selectedSubscriptionUnit, ['required' => 'required']) ?>
+                                <?= ui_button('Masuk ke Setting Perpanjangan', ['type' => 'submit', 'variant' => 'primary', 'class' => 'w-full']) ?>
+                            </form>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </section>
+        </main>
+    <?php elseif (!$user): ?>
         <main class="login-shell">
             <section class="login-single-wrap">
                 <div class="login-single-card">
@@ -215,7 +310,10 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
                         <div>
                             <p class="text-xs font-semibold tracking-[0.35em] text-slate-300">UNIT AKTIF</p>
                             <h1 class="mt-4 text-3xl font-semibold leading-tight"><?= e($unitName) ?></h1>
-                            <p class="mt-3 text-sm text-slate-300"><?= e($user['name']) ?> &middot; <?= e($user['role']) ?></p>
+                        <p class="mt-3 text-sm text-slate-300"><?= e($user['name']) ?> &middot; <?= e($user['role']) ?></p>
+                        <?php if ($subscriptionLockedForCurrentUser): ?>
+                            <p class="mt-3 rounded-2xl bg-amber-400/15 px-3 py-2 text-xs font-semibold text-amber-100">Subscription perlu diperpanjang</p>
+                        <?php endif; ?>
                         </div>
                         <button type="button" class="sidebar-toggle border-white/10 bg-white/10 text-white hover:bg-white/15" data-sidebar-close aria-label="Sembunyikan sidebar">
                             <?= ui_icon('x-mark', 'h-5 w-5') ?>
@@ -223,13 +321,15 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
                     </div>
 
                     <nav class="sidebar-nav">
-                        <button class="nav-link nav-pill active" data-section="dashboard"><?= ui_icon('home', 'h-5 w-5') ?> Dashboard</button>
-                        <button class="nav-link nav-pill" data-section="absensi"><?= ui_icon('calendar', 'h-5 w-5') ?> Absensi</button>
-                        <button class="nav-link nav-pill" data-section="validasi"><?= ui_icon('check-circle', 'h-5 w-5') ?> Validasi</button>
-                        <button class="nav-link nav-pill" data-section="gaji"><?= ui_icon('banknotes', 'h-5 w-5') ?> Gaji</button>
-                        <button class="nav-link nav-pill" data-section="users"><?= ui_icon('users', 'h-5 w-5') ?> User</button>
-                        <button class="nav-link nav-pill" data-section="units"><?= ui_icon('building-office-2', 'h-5 w-5') ?> Unit</button>
-                        <button class="nav-link nav-pill" data-section="settings"><?= ui_icon('cog-6-tooth', 'h-5 w-5') ?> Setting</button>
+                        <?php if (!$subscriptionLockedForCurrentUser): ?>
+                            <button class="nav-link nav-pill active" data-section="dashboard"><?= ui_icon('home', 'h-5 w-5') ?> Dashboard</button>
+                            <button class="nav-link nav-pill" data-section="absensi"><?= ui_icon('calendar', 'h-5 w-5') ?> Absensi</button>
+                            <button class="nav-link nav-pill" data-section="validasi"><?= ui_icon('check-circle', 'h-5 w-5') ?> Validasi</button>
+                            <button class="nav-link nav-pill" data-section="gaji"><?= ui_icon('banknotes', 'h-5 w-5') ?> Gaji</button>
+                            <button class="nav-link nav-pill" data-section="users"><?= ui_icon('users', 'h-5 w-5') ?> User</button>
+                            <button class="nav-link nav-pill" data-section="units"><?= ui_icon('building-office-2', 'h-5 w-5') ?> Unit</button>
+                        <?php endif; ?>
+                        <button class="nav-link nav-pill <?= $subscriptionLockedForCurrentUser ? 'active' : '' ?>" data-section="settings"><?= ui_icon('cog-6-tooth', 'h-5 w-5') ?> Setting</button>
                     </nav>
 
                     <div class="pt-1">
@@ -248,13 +348,13 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
                             <?= ui_icon('bars-3', 'h-5 w-5') ?>
                         </button>
                         <div class="min-w-0">
-                            <p class="text-sm text-slate-500">Panel operasional absensi dan penggajian 2</p>
-                            <h2 id="page-title" class="mt-2 text-2xl font-semibold text-slate-900 lg:text-4xl">Dashboard</h2>
+                            <p class="text-sm text-slate-500"><?= $subscriptionLockedForCurrentUser ? 'Panel perpanjangan subscription' : 'Panel operasional absensi dan penggajian 2' ?></p>
+                            <h2 id="page-title" class="mt-2 text-2xl font-semibold text-slate-900 lg:text-4xl"><?= $subscriptionLockedForCurrentUser ? 'Setting' : 'Dashboard' ?></h2>
                         </div>
                     </div>
                     <div class="text-right text-sm text-slate-500">
                         <p><?= e(date('d F Y')) ?></p>
-                        <p>Data unit aktif siap dikelola</p>
+                        <p><?= $subscriptionLockedForCurrentUser ? 'Validasi pembayaran untuk membuka akses' : 'Data unit aktif siap dikelola' ?></p>
                     </div>
                 </div>
 
@@ -264,6 +364,14 @@ $unitName = $user ? (fetch_one('SELECT nama_unit FROM units WHERE id = :id', ['i
                 </div>
             </main>
         </div>
+    <?php endif; ?>
+    <?php if ($subscriptionLockedForCurrentUser): ?>
+        <script>
+            localStorage.setItem('sigaji.active.section', 'settings');
+            if (!window.location.hash) {
+                window.location.hash = 'settings';
+            }
+        </script>
     <?php endif; ?>
     <script src="<?= e(asset_url('assets/app.js')) ?>" defer></script>
 </body>

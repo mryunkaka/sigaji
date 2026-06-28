@@ -33,6 +33,11 @@ final class Auth
             return false;
         }
 
+        if (($user['role'] ?? 'karyawan') !== 'owner' && !SubscriptionService::isActiveForUnit($unitId)) {
+            self::setNotice('Subscription unit sudah jatuh tempo. Upload bukti pembayaran untuk perpanjangan.');
+            return false;
+        }
+
         if (($user['role'] ?? 'karyawan') === 'owner' && (int) $user['unit_id'] !== $unitId) {
             execute_query('UPDATE users SET unit_id = :unit_id, updated_at = :updated_at WHERE id = :id', [
                 'unit_id' => $unitId,
@@ -111,7 +116,54 @@ final class Auth
             redirect_to('index.php');
         }
 
+        $user = self::user();
+        if (!self::canAccessSubscriptionLockedUnit($user)) {
+            if (expects_json()) {
+                json_response([
+                    'success' => false,
+                    'message' => 'Subscription unit sudah jatuh tempo. Hanya setting perpanjangan yang bisa diakses.',
+                    'subscription_locked' => true,
+                    'redirect' => 'index.php#settings',
+                ], 423);
+            }
+
+            redirect_to('index.php#settings');
+        }
+
         return self::user();
+    }
+
+    public static function canAccessSubscriptionLockedUnit(?array $user = null): bool
+    {
+        $user = $user ?? self::user();
+        if (!$user || empty($user['unit_id'])) {
+            return true;
+        }
+
+        if (SubscriptionService::isActiveForUnit((int) $user['unit_id'])) {
+            return true;
+        }
+
+        if (($user['role'] ?? '') !== 'owner') {
+            return false;
+        }
+
+        $path = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        $uri = str_replace('\\', '/', (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH));
+        $allowed = [
+            '/index.php',
+            '/logout.php',
+            '/ajax/settings.php',
+            '/ajax/save_subscription_action.php',
+        ];
+
+        foreach ($allowed as $suffix) {
+            if (str_ends_with($path, $suffix) || str_ends_with($uri, $suffix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function logout(): void

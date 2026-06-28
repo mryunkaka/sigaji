@@ -1,6 +1,8 @@
 module.exports = {
   content: [
+    './*.php',
     './index.php',
+    './subscription-admin.php',
     './ajax/**/*.php',
     './components/**/*.php',
     './print_*.php',

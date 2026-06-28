@@ -1,0 +1,32 @@
+-- Subscription berlaku global untuk semua unit.
+-- Aplikasi akan membaca masa aktif paling panjang dari semua row units
+-- dan saat approve/perpanjang manual akan mengisi semua unit sekaligus.
+
+ALTER TABLE units
+  ADD COLUMN subscription_expires_at DATETIME NULL DEFAULT NULL,
+  ADD COLUMN subscription_locked_at DATETIME NULL DEFAULT NULL,
+  ADD COLUMN subscription_notes TEXT NULL DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS subscription_requests (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  unit_id BIGINT UNSIGNED NOT NULL,
+  requested_by VARCHAR(255) NULL,
+  contact VARCHAR(255) NULL,
+  duration_code VARCHAR(50) NOT NULL,
+  duration_label VARCHAR(100) NOT NULL,
+  proof_path VARCHAR(255) NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'pending',
+  admin_notes TEXT NULL,
+  approved_by BIGINT UNSIGNED NULL,
+  approved_at DATETIME NULL,
+  rejected_by BIGINT UNSIGNED NULL,
+  rejected_at DATETIME NULL,
+  starts_at DATETIME NULL,
+  expires_at DATETIME NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY subscription_requests_unit_id_index (unit_id),
+  KEY subscription_requests_status_index (status),
+  CONSTRAINT subscription_requests_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES units (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

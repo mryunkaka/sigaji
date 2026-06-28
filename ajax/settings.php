@@ -121,6 +121,92 @@ $form = '<form action="ajax/save_settings.php" method="post" data-ajax-form clas
     . '<div class="md:col-span-2 flex justify-end">' . ui_button('Simpan Setting', ['type' => 'submit', 'variant' => 'success']) . '</div>'
     . '</form>';
 
+$subscriptionPanel = '';
+if (($authUser['role'] ?? '') === 'owner') {
+    $allUnits = fetch_all('SELECT id, nama_unit, subscription_expires_at, subscription_locked_at FROM units ORDER BY nama_unit');
+    $statusCards = '<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">';
+    foreach ($allUnits as $unitRow) {
+        $status = SubscriptionService::statusForUnit((int) $unitRow['id']);
+        $toneClass = $status['active'] ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700';
+        $statusCards .= '<div class="rounded-[24px] border ' . $toneClass . ' px-4 py-4">'
+            . '<p class="text-sm font-semibold text-slate-900">' . e($unitRow['nama_unit']) . '</p>'
+            . '<p class="mt-2 text-sm">' . ($status['active'] ? 'Aktif' : 'Terkunci') . '</p>'
+            . '<p class="mt-1 text-xs">' . e($status['expires_at'] ? ('Jatuh tempo: ' . format_date_id($status['expires_at'], true)) : 'Belum ada masa aktif') . '</p>'
+            . '</div>';
+    }
+    $statusCards .= '</div>';
+
+    $manualForm = '<form action="ajax/save_subscription_action.php" method="post" data-ajax-form class="grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto]">'
+        . csrf_input()
+        . '<input type="hidden" name="subscription_action" value="manual_extend">'
+        . ui_select('unit_id', 'Referensi Unit', array_column($allUnits, 'nama_unit', 'id'), $authUser['unit_id'], ['required' => 'required'])
+        . ui_select('duration_code', 'Durasi', SubscriptionService::durationOptions(), '1_month', ['required' => 'required'])
+        . ui_input('admin_notes', 'Catatan', '', 'text', ['placeholder' => 'Opsional'])
+        . '<div class="flex items-end">' . ui_button('Perpanjang Manual', ['type' => 'submit', 'variant' => 'primary', 'class' => 'w-full']) . '</div>'
+        . '</form>';
+
+    $requestRows = '';
+    $requests = SubscriptionService::pendingRequests();
+    foreach ($requests as $request) {
+        $statusTone = match ($request['status']) {
+            'approved' => 'emerald',
+            'rejected' => 'rose',
+            default => 'amber',
+        };
+        $proofUrl = e((string) $request['proof_path']);
+        $actions = '<span class="text-xs text-slate-400">Selesai</span>';
+        if ($request['status'] === 'pending') {
+            $actions = '<div class="flex flex-col gap-2">'
+                . '<form action="ajax/save_subscription_action.php" method="post" data-ajax-form class="flex gap-2">'
+                . csrf_input()
+                . '<input type="hidden" name="subscription_action" value="approve">'
+                . '<input type="hidden" name="request_id" value="' . e((string) $request['id']) . '">'
+                . '<input type="hidden" name="admin_notes" value="">'
+                . ui_button('Setujui', ['type' => 'submit', 'variant' => 'success', 'class' => 'w-full'])
+                . '</form>'
+                . '<form action="ajax/save_subscription_action.php" method="post" data-ajax-form class="flex gap-2">'
+                . csrf_input()
+                . '<input type="hidden" name="subscription_action" value="reject">'
+                . '<input type="hidden" name="request_id" value="' . e((string) $request['id']) . '">'
+                . '<input type="hidden" name="admin_notes" value="">'
+                . ui_button('Tolak', ['type' => 'submit', 'variant' => 'danger', 'class' => 'w-full'])
+                . '</form>'
+                . '</div>';
+        }
+
+        $requestRows .= '<tr>'
+            . '<td class="px-4 py-3">' . e($request['nama_unit']) . '</td>'
+            . '<td class="px-4 py-3">' . e($request['requested_by'] ?: '-') . '<div class="text-xs text-slate-400">' . e($request['contact'] ?: '-') . '</div></td>'
+            . '<td class="px-4 py-3">' . e($request['duration_label']) . '</td>'
+            . '<td class="px-4 py-3"><a class="font-semibold text-sky-600 hover:text-sky-700" href="' . $proofUrl . '" target="_blank" rel="noopener">Lihat Bukti</a></td>'
+            . '<td class="px-4 py-3">' . ui_badge(ucfirst((string) $request['status']), $statusTone) . '<div class="mt-1 text-xs text-slate-400">' . e(format_date_id($request['created_at'], true)) . '</div></td>'
+            . '<td class="px-4 py-3">' . $actions . '</td>'
+            . '</tr>';
+    }
+
+    if ($requestRows === '') {
+        $requestRows = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Belum ada pengajuan perpanjangan.</td></tr>';
+    }
+
+    $requestTable = ui_table(
+        ['Unit', 'Pengirim', 'Durasi', 'Bukti', 'Status', ['label' => 'Aksi', 'sortable' => false]],
+        $requestRows,
+        [
+            'storage_key' => 'subscription-requests',
+            'search_column' => 0,
+            'search_placeholder' => 'Cari unit...',
+            'rows_per_page' => [10, 20, 50, 'all'],
+        ]
+    );
+
+    $subscriptionPanel = '<div class="space-y-5">'
+        . '<div class="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-700">Akses otomatis terkunci untuk semua unit setiap tanggal 28 jam 00:00 saat masa aktif aplikasi sudah habis. Setujui bukti pembayaran atau perpanjang manual untuk membuka kembali seluruh unit.</div>'
+        . $statusCards
+        . '<div class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">' . $manualForm . '</div>'
+        . $requestTable
+        . '</div>';
+}
+
 if ($migrationMissing) {
     $form = '<div class="space-y-4">'
         . '<div class="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-700">Pengaturan periode belum siap dipakai karena kolom database belum lengkap. Jalankan file SQL pembaruan terlebih dahulu.</div>'
@@ -128,8 +214,21 @@ if ($migrationMissing) {
         . '</div>';
 }
 
+$activeSubscriptionStatus = SubscriptionService::statusForUnit((int) $authUser['unit_id']);
+if (($activeSubscriptionStatus['locked'] ?? false) && ($authUser['role'] ?? '') === 'owner') {
+    $form = '<div class="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-700">Unit sedang terkunci karena subscription jatuh tempo. Setting absensi tidak dapat diubah sampai perpanjangan divalidasi.</div>';
+}
+
 echo ui_panel(
     'Setting Absensi',
     $form,
     ['subtitle' => 'Unit aktif: ' . $unit['nama_unit'] . '. Atur toleransi, periode, dan jam kerja di sini.']
 );
+
+if ($subscriptionPanel !== '') {
+    echo '<div class="mt-6">' . ui_panel(
+        'Setting Perpanjangan',
+        $subscriptionPanel,
+        ['subtitle' => 'Validasi manual bukti pembayaran dan masa aktif subscription untuk semua unit.']
+    ) . '</div>';
+}

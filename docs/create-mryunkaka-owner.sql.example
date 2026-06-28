@@ -1,0 +1,32 @@
+INSERT INTO users (
+  name,
+  email,
+  password,
+  two_factor_secret,
+  two_factor_recovery_codes,
+  two_factor_confirmed_at,
+  jabatan,
+  role,
+  unit_id,
+  tanggal_bergabung,
+  created_at,
+  updated_at
+) VALUES (
+  'mryunkaka',
+  'mryunkaka@gmail.com',
+  '$2y$12$K9/QzoKlggEPpF6lAHj4FOLHnQUI9ew3m3sfzYyoaIkb.sQTYDF3C',
+  '',
+  '',
+  NOW(),
+  'Owner',
+  'owner',
+  1,
+  CURDATE(),
+  NOW(),
+  NOW()
+) ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  password = VALUES(password),
+  jabatan = VALUES(jabatan),
+  role = VALUES(role),
+  updated_at = VALUES(updated_at);
