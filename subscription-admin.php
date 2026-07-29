@@ -2,21 +2,59 @@
 
 require __DIR__ . '/bootstrap/app.php';
 
-$pin = (string) env('SUBSCRIPTION_ADMIN_PIN', '814128');
+$pin = (string) env('SUBSCRIPTION_ADMIN_PIN', '');
 $sessionKey = 'subscription_admin_unlocked';
 $message = '';
 $error = '';
 
-if (is_post()) {
+if ($pin === '') {
+    $error = 'PIN subscription admin belum diatur di file .env (SUBSCRIPTION_ADMIN_PIN).';
+} elseif (is_post()) {
     verify_csrf();
     $action = (string) request_value('action', '');
+    $security = SecurityService::getInstance();
+    $lockoutBucket = 'subscription_admin_pin';
+    $lockoutMax = (int) env('BRUTE_FORCE_MAX_ATTEMPTS', '5');
+    $lockoutSeconds = (int) env('BRUTE_FORCE_LOCKOUT_TIME', '900');
+    $lockoutDecay = (int) env('BRUTE_FORCE_DECAY_TIME', '300');
 
     if ($action === 'pin_login') {
-        if (hash_equals($pin, (string) request_value('pin', ''))) {
-            $_SESSION[$sessionKey] = true;
-            $message = 'Akses subscription admin terbuka.';
+        $lockoutStatus = persistent_lockout_status($lockoutBucket, $lockoutMax, $lockoutSeconds, $lockoutDecay);
+        if (!$security->checkRateLimit()) {
+            $error = 'Terlalu banyak permintaan. Silakan coba lagi dalam beberapa menit.';
+        } elseif ($lockoutStatus['locked'] || !$security->checkBruteForce($lockoutBucket)) {
+            $remainingMinutes = max(1, (int) ceil(max($lockoutStatus['remaining_seconds'], $lockoutSeconds) / 60));
+            $error = 'Terlalu banyak percobaan PIN gagal. Akses dikunci sementara selama sekitar ' . $remainingMinutes . ' menit.';
         } else {
-            $error = 'PIN tidak sesuai.';
+            $submittedPin = (string) request_value('pin', '');
+            if ($submittedPin !== '' && hash_equals($pin, $submittedPin)) {
+                $security->resetBruteForce($lockoutBucket);
+                persistent_lockout_reset($lockoutBucket);
+                $_SESSION[$sessionKey] = true;
+                ActivityLogService::log(
+                    'subscription_admin_unlock',
+                    'Akses subscription-admin.php dibuka dengan PIN.',
+                    [],
+                    Auth::id(),
+                    Auth::unitId(),
+                    'subscription_admin',
+                    null
+                );
+                $message = 'Akses subscription admin terbuka.';
+            } else {
+                $security->recordFailedAttempt($lockoutBucket);
+                persistent_lockout_record_failure($lockoutBucket, $lockoutMax, $lockoutSeconds, $lockoutDecay);
+                ActivityLogService::log(
+                    'subscription_admin_unlock_failed',
+                    'Percobaan PIN subscription-admin.php gagal.',
+                    [],
+                    Auth::id(),
+                    Auth::unitId(),
+                    'subscription_admin',
+                    null
+                );
+                $error = 'PIN tidak sesuai.';
+            }
         }
     } elseif ($action === 'pin_logout') {
         unset($_SESSION[$sessionKey]);

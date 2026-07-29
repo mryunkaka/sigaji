@@ -494,3 +494,60 @@ function public_asset_path(?string $path): ?string
 
     return null;
 }
+
+/**
+ * Persistent (file-based, not session-based) brute-force lockout.
+ * Unlike session-based counters, this cannot be bypassed by clearing cookies
+ * because state is keyed by client IP and stored on disk.
+ *
+ * Returns ['locked' => bool, 'remaining_seconds' => int].
+ */
+function persistent_lockout_status(string $bucket, int $maxAttempts, int $lockoutSeconds, int $decaySeconds): array
+{
+    $ip = substr((string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'), 0, 45);
+    $path = ensure_storage_path('lockouts/' . preg_replace('/[^a-z0-9_-]/i', '_', $bucket) . '-' . md5($ip) . '.json');
+
+    $state = ['count' => 0, 'first_at' => time(), 'locked_until' => 0];
+    if (is_file($path)) {
+        $decoded = json_decode((string) file_get_contents($path), true);
+        if (is_array($decoded)) {
+            $state = array_merge($state, $decoded);
+        }
+    }
+
+    if ((int) $state['locked_until'] > time()) {
+        return ['locked' => true, 'remaining_seconds' => (int) $state['locked_until'] - time(), 'path' => $path, 'state' => $state];
+    }
+
+    if ($state['locked_until'] > 0 && (int) $state['locked_until'] <= time()) {
+        $state = ['count' => 0, 'first_at' => time(), 'locked_until' => 0];
+    }
+
+    if ((time() - (int) $state['first_at']) > $decaySeconds) {
+        $state = ['count' => 0, 'first_at' => time(), 'locked_until' => 0];
+    }
+
+    return ['locked' => false, 'remaining_seconds' => 0, 'path' => $path, 'state' => $state];
+}
+
+function persistent_lockout_record_failure(string $bucket, int $maxAttempts, int $lockoutSeconds, int $decaySeconds): void
+{
+    $status = persistent_lockout_status($bucket, $maxAttempts, $lockoutSeconds, $decaySeconds);
+    $state = $status['state'];
+    $state['count'] = (int) $state['count'] + 1;
+
+    if ($state['count'] >= $maxAttempts) {
+        $state['locked_until'] = time() + $lockoutSeconds;
+    }
+
+    file_put_contents($status['path'], json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+}
+
+function persistent_lockout_reset(string $bucket): void
+{
+    $ip = substr((string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'), 0, 45);
+    $path = ensure_storage_path('lockouts/' . preg_replace('/[^a-z0-9_-]/i', '_', $bucket) . '-' . md5($ip) . '.json');
+    if (is_file($path)) {
+        @unlink($path);
+    }
+}

@@ -4,30 +4,19 @@ require __DIR__ . '/../bootstrap/app.php';
 $authUser = Auth::require();
 verify_csrf();
 
-if (($authUser['role'] ?? '') !== 'owner') {
-    json_response(['success' => false, 'message' => 'Hanya owner yang bisa memvalidasi subscription.'], 403);
-}
-
-$action = (string) request_value('subscription_action', '');
-$notes = trim((string) request_value('admin_notes', ''));
-
-if ($action === 'approve') {
-    $result = SubscriptionService::approve((int) request_value('request_id'), (int) $authUser['id'], $notes);
-} elseif ($action === 'reject') {
-    $result = SubscriptionService::reject((int) request_value('request_id'), (int) $authUser['id'], $notes);
-} elseif ($action === 'manual_extend') {
-    $result = SubscriptionService::manualExtend(
-        (int) request_value('unit_id'),
-        (string) request_value('duration_code'),
-        (int) $authUser['id'],
-        $notes
-    );
-} else {
-    $result = ['success' => false, 'message' => 'Aksi subscription tidak valid.'];
-}
+// Single-door policy: semua aksi approve/reject/perpanjangan/matikan subscription
+// HANYA boleh lewat subscription-admin.php (dengan PIN + rate-limit + brute-force
+// protection tersendiri). Endpoint ini sengaja dinonaktifkan agar tidak ada pintu
+// kedua yang bisa dibruteforce lewat sesi login user biasa/owner.
+ActivityLogService::logCurrentUser(
+    'subscription_action_blocked',
+    'Percobaan aksi subscription lewat pintu aplikasi diblok. Hanya subscription-admin.php yang diizinkan.',
+    ['subscription_action' => (string) request_value('subscription_action', '')],
+    'subscription',
+    null
+);
 
 json_response([
-    'success' => $result['success'],
-    'message' => $result['message'],
-    'reloadSection' => $result['success'] ? 'settings' : null,
-], $result['success'] ? 200 : 422);
+    'success' => false,
+    'message' => 'Aksi subscription tidak bisa dilakukan dari sini. Hubungi admin untuk validasi lewat subscription-admin.php.',
+], 403);

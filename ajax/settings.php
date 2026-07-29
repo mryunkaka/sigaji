@@ -136,15 +136,6 @@ if (($authUser['role'] ?? '') === 'owner') {
     }
     $statusCards .= '</div>';
 
-    $manualForm = '<form action="ajax/save_subscription_action.php" method="post" data-ajax-form class="grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto]">'
-        . csrf_input()
-        . '<input type="hidden" name="subscription_action" value="manual_extend">'
-        . ui_select('unit_id', 'Referensi Unit', array_column($allUnits, 'nama_unit', 'id'), $authUser['unit_id'], ['required' => 'required'])
-        . ui_select('duration_code', 'Durasi', SubscriptionService::durationOptions(), '1_month', ['required' => 'required'])
-        . ui_input('admin_notes', 'Catatan', '', 'text', ['placeholder' => 'Opsional'])
-        . '<div class="flex items-end">' . ui_button('Perpanjang Manual', ['type' => 'submit', 'variant' => 'primary', 'class' => 'w-full']) . '</div>'
-        . '</form>';
-
     $requestRows = '';
     $requests = SubscriptionService::pendingRequests();
     foreach ($requests as $request) {
@@ -154,25 +145,6 @@ if (($authUser['role'] ?? '') === 'owner') {
             default => 'amber',
         };
         $proofUrl = e((string) $request['proof_path']);
-        $actions = '<span class="text-xs text-slate-400">Selesai</span>';
-        if ($request['status'] === 'pending') {
-            $actions = '<div class="flex flex-col gap-2">'
-                . '<form action="ajax/save_subscription_action.php" method="post" data-ajax-form class="flex gap-2">'
-                . csrf_input()
-                . '<input type="hidden" name="subscription_action" value="approve">'
-                . '<input type="hidden" name="request_id" value="' . e((string) $request['id']) . '">'
-                . '<input type="hidden" name="admin_notes" value="">'
-                . ui_button('Setujui', ['type' => 'submit', 'variant' => 'success', 'class' => 'w-full'])
-                . '</form>'
-                . '<form action="ajax/save_subscription_action.php" method="post" data-ajax-form class="flex gap-2">'
-                . csrf_input()
-                . '<input type="hidden" name="subscription_action" value="reject">'
-                . '<input type="hidden" name="request_id" value="' . e((string) $request['id']) . '">'
-                . '<input type="hidden" name="admin_notes" value="">'
-                . ui_button('Tolak', ['type' => 'submit', 'variant' => 'danger', 'class' => 'w-full'])
-                . '</form>'
-                . '</div>';
-        }
 
         $requestRows .= '<tr>'
             . '<td class="px-4 py-3">' . e($request['nama_unit']) . '</td>'
@@ -180,16 +152,15 @@ if (($authUser['role'] ?? '') === 'owner') {
             . '<td class="px-4 py-3">' . e($request['duration_label']) . '</td>'
             . '<td class="px-4 py-3"><a class="font-semibold text-sky-600 hover:text-sky-700" href="' . $proofUrl . '" target="_blank" rel="noopener">Lihat Bukti</a></td>'
             . '<td class="px-4 py-3">' . ui_badge(ucfirst((string) $request['status']), $statusTone) . '<div class="mt-1 text-xs text-slate-400">' . e(format_date_id($request['created_at'], true)) . '</div></td>'
-            . '<td class="px-4 py-3">' . $actions . '</td>'
             . '</tr>';
     }
 
     if ($requestRows === '') {
-        $requestRows = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Belum ada pengajuan perpanjangan.</td></tr>';
+        $requestRows = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Belum ada pengajuan perpanjangan.</td></tr>';
     }
 
     $requestTable = ui_table(
-        ['Unit', 'Pengirim', 'Durasi', 'Bukti', 'Status', ['label' => 'Aksi', 'sortable' => false]],
+        ['Unit', 'Pengirim', 'Durasi', 'Bukti', 'Status'],
         $requestRows,
         [
             'storage_key' => 'subscription-requests',
@@ -200,9 +171,8 @@ if (($authUser['role'] ?? '') === 'owner') {
     );
 
     $subscriptionPanel = '<div class="space-y-5">'
-        . '<div class="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-700">Akses otomatis terkunci untuk semua unit setiap tanggal 28 jam 00:00 saat masa aktif aplikasi sudah habis. Setujui bukti pembayaran atau perpanjang manual untuk membuka kembali seluruh unit.</div>'
+        . '<div class="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-700">Akses otomatis terkunci untuk semua unit setiap tanggal 28 jam 00:00 saat masa aktif aplikasi sudah habis, dan semua sesi login akan dipaksa keluar otomatis. Panel ini hanya menampilkan status (read-only). Validasi bukti pembayaran, perpanjangan manual, dan penonaktifan subscription <strong>hanya bisa dilakukan lewat halaman <a class="underline" href="subscription-admin.php" target="_blank" rel="noopener">subscription-admin.php</a></strong>.</div>'
         . $statusCards
-        . '<div class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4">' . $manualForm . '</div>'
         . $requestTable
         . '</div>';
 }

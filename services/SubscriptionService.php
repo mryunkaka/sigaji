@@ -356,6 +356,8 @@ final class SubscriptionService
             return ['success' => false, 'message' => 'Tanggal dan jam subscription tidak valid.'];
         }
 
+        $willBeLocked = $date <= new DateTimeImmutable('now');
+
         execute_query(
             'UPDATE units
              SET subscription_expires_at = :expires_at,
@@ -370,6 +372,10 @@ final class SubscriptionService
                 'updated_at' => now_string(),
             ]
         );
+
+        if ($willBeLocked) {
+            self::forceLogoutAllUsers('Tanggal subscription diatur ke masa lampau/sekarang lewat subscription-admin.php. Semua sesi login dipaksa keluar.');
+        }
 
         ActivityLogService::log(
             'subscription_set_expiry',
@@ -401,6 +407,8 @@ final class SubscriptionService
                 'updated_at' => now_string(),
             ]
         );
+
+        self::forceLogoutAllUsers('Subscription dimatikan manual lewat subscription-admin.php. Semua sesi login dipaksa keluar.');
 
         ActivityLogService::log(
             'subscription_disable',
@@ -503,15 +511,43 @@ final class SubscriptionService
     private static function markLocked(): void
     {
         try {
-            execute_query(
+            $stmt = db()->prepare(
                 'UPDATE units
                  SET subscription_locked_at = :locked_at,
                      updated_at = :updated_at
-                 WHERE subscription_locked_at IS NULL',
-                ['locked_at' => now_string(), 'updated_at' => now_string()]
+                 WHERE subscription_locked_at IS NULL'
             );
+            $stmt->execute(['locked_at' => now_string(), 'updated_at' => now_string()]);
+
+            if ($stmt->rowCount() > 0) {
+                self::forceLogoutAllUsers('Subscription jatuh tempo otomatis. Semua sesi login dipaksa keluar sampai subscription diperpanjang lewat subscription-admin.php.');
+            }
         } catch (Throwable $exception) {
             // Lock marker is best effort; status calculation still protects access.
+        }
+    }
+
+    private static function forceLogoutAllUsers(string $reason): void
+    {
+        try {
+            execute_query(
+                'UPDATE users
+                 SET session_login_token = NULL,
+                     updated_at = :updated_at
+                 WHERE session_login_token IS NOT NULL'
+            , ['updated_at' => now_string()]);
+
+            ActivityLogService::log(
+                'subscription_force_logout',
+                $reason,
+                [],
+                null,
+                null,
+                'subscription',
+                'global'
+            );
+        } catch (Throwable $exception) {
+            // Best effort; must never block subscription status calculation.
         }
     }
 
